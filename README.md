@@ -96,7 +96,7 @@ The level shifter can be disconnected from the DAC via jumper JP3 in order to in
 
 Potentiometer RV1 controls the gain of the high voltage output and should be adjusted to give a 100x amplification.
 
-NOTE: THE CURRENT PCB HAS AN ERROR (see "Errata" below) where the source and drain of PMOS transistor Q3 are switched. If this is not fixed during assembly, when the high voltage low rail is turned on, significant current will flow through R17, which will burn out due to excessive power draw.
+NOTE: PCBs FABBED FROM PRE-2026-09-09 DESIGN FILES HAVE AN ERROR (see "Errata" below) where the source and drain of PMOS transistor Q3 are switched. If this is not fixed during assembly, when the high voltage low rail is turned on, significant current will flow through R17, which will burn out due to excessive power draw. The design files were corrected on 2026-09-09 (schematic pin mapping + copper reroute, DRC/ERC/netlist verified); boards fabbed from the corrected files take Q3 with straight legs. The exported gerbers under jlcpcb/ were regenerated from the corrected design on 2026-09-09.
 
 ### High side monitor circuit
 
@@ -136,7 +136,7 @@ These boards were designed in KiCad and ordered from JLCPCB with help from the e
 
 Hand assembly of the through hole components takes about 20 minutes per board.
 
-Be sure to bend the legs of the PMOS MOSFET to switch its source and drain to fix a board error (see "Errata" section below).
+Boards fabbed from pre-2026-09-09 design files: be sure to bend the legs of the PMOS MOSFET (Q3) to switch its source and drain to fix a board error (see "Errata" section below). Boards fabbed from the corrected design files (2026-09-09 or later) install Q3 normally with straight legs — verify which revision a bare board is before assembly.
 
 Header pins are ordered in lenths of 18 to reduce costs. These should be manually cut to size (or ordered in the right size to begin with).
 
@@ -193,8 +193,10 @@ After the board is assembled, the following bringup/test strategy seems to work 
 
 ## Errata and Future Improvements
 
-Board error:
-- The PMOS transistor (Q3) source and drain pins are switched on the PCB. This can be fixed when hand-soldering by bending the MOSFET legs to fit the right holes. Not doing this causes excessive current through R17, burning it out, with possible additional damage to RV1.
+Board error (FIXED in design files 2026-09-09; still applies to boards fabbed before then):
+- The PMOS transistor (Q3) source and drain pins are switched on the PCB. On boards fabbed from pre-fix files, this can be fixed when hand-soldering by bending the MOSFET legs to fit the right holes. Not doing this causes excessive current through R17, burning it out, with possible additional damage to RV1.
+- Design-file fix (2026-09-09): the Q_PMOS_GDS symbol pin mapping for Q3 was corrected in hvawg.kicad_sch (S=pin 3 to the RV1/U6 network, D=pin 2 to levelshift_out, matching the physical IRF9610 G-D-S pinout), the corresponding pad nets were swapped and copper rerouted in hvawg.kicad_pcb (net "Net-(Q3-D)" renamed "Net-(Q3-S)", zones refilled). Verified: netlist shows Q3 pin 2 on levelshift_out / pin 3 on Net-(Q3-S); DRC and ERC reports are identical to pre-fix baseline (no new violations, 0 unconnected). Boards fabbed from these files install Q3 with straight legs. The exported gerbers and production zip under jlcpcb/ were regenerated from the corrected design on 2026-09-09 (drill files verified hole-identical; copper carries the corrected nets).
+- A safe first-power check for ANY board of unknown revision: set the negative-HV supply current limit to 2 mA and ramp toward -20 V. Reaching full voltage at under ~1 mA means Q3 is correct; pinning at the 2 mA limit with the rail collapsed means the swap is active (the 2 mA ceiling keeps R17 well within its power rating either way).
 
 EMI issue:
 - I suspect this board might sometimes generate nontrivial RF noise. Qualitative tests show unshielded wires on the output (or maybe even the wires connecting the through-hole power resistor) generate an undesired signal. Thus, be very careful with board use. Future board iterations should fix this issue by, e.g., more careful PCB trace design and changing the signal output connector to a shielded RF SMA connector or similar.
