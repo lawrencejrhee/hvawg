@@ -1,0 +1,90 @@
+(version 1)
+
+# HVAWG high-voltage clearance rules (KiCad 9 custom design rules).
+# Added 2026-09-23 with the HV clearance audit; revised 2026-09-23 for the safety revision (connector
+# pinouts with no >150 V neighbours, 7-pin output bus, HV TO-220 footprint, C32 1206, TP12 moved):
+# the four known-shortfall exceptions of the first version are gone, nothing is relaxed below IPC-2221B.
+# KiCad loads this file automatically for DRC and zone filling because it sits next to hvawg.kicad_pro.
+#
+# ---------------------------------------------------------------------------------------------
+# VOLTAGE DOMAINS (design worst case: +/-150 V rails; the bench currently runs +/-50 V)
+#   +HV      '+100V'                                  +150 V  (net names predate the 150 V limit)
+#   -HV      '-100V' (-150 V), '-100+12V' (-138 V, floating 12 V supply on -100V), and the nodes
+#            referenced to them: 'Net-(D4-K)' Q1 gate / U7 out, 'Net-(D4-A)' Q1 source / U7 -in,
+#            'Net-(JP4-B)' U7 +in, 'levelshift_out' Q3 drain, 'Net-(D3-A)' LED node:  -150..-138 V
+#   output   'Net-(Q1-D)' 'output_post' 'Net-(C32-Pad1)' and the output bus OUT1..OUT4 on J7/J8 pins
+#            1/3/5/7: 'Net-(J7-Pin_1)' 'Net-(J7-Pin_3)' 'Net-(J7-Pin_5)' 'Net-(J7-Pin_7)'          -150..+150 V
+#            (two output channels on the bus can sit at opposite rails: 300 V apart)
+#   LV       everything else: GND, +/-12 V, 5 V logic, DAC, monitor tap Net-(C14-Pad1) <= 2.5 V
+# Worst-case voltage between conductors:
+#   +HV vs -HV/output 288-300 V, output vs output 300 V, any HV vs LV/GND 150-162 V,
+#   -HV vs -HV <= 12 V (left to the Default netclass, 0.2 mm).
+# If a net is renamed or added in the schematic, update the net lists in EVERY rule below
+# (regenerate this file with gen_dru_v3.py and the real output-bus net names).
+#
+# IPC-2221B Table 6-1, minimum conductor spacing, sea level to 3050 m:
+#                           101-150 V  151-170 V  171-250 V  251-300 V  301-500 V
+#   A6 exposed pad / lead      0.8        0.8        0.8        0.8        1.5
+#   B4 under solder mask       0.4        0.4        0.4        0.4        0.8
+# So every HV pair on this board needs 0.8 mm (A6) when a pad or other unmasked copper is one
+# side, and 0.4 mm (B4) when both sides are mask-covered.  Vias are tented on both sides (board
+# setup) and the solder-mask expansion is 0, so tracks, vias and zone fill count as mask-covered.
+#
+# 300 V is the TOP of the 251-300 V band.  If the rails ever run above +/-150 V, the 300 V pairs
+# need 1.5 mm (A6) / 0.8 mm (B4) and these rules must be raised.
+#
+# PRECEDENCE: when several rules match a pair, the rule LATER in this file wins (checked with
+# kicad-cli 9.0.6).  General rules come first, narrower overrides after them.
+# ---------------------------------------------------------------------------------------------
+
+# (b) any HV net against LV nets, GND and no-net copper: 150-162 V -> A6 0.8 mm
+(rule "HV_vs_LV_A6"
+  (constraint clearance (min 0.8mm))
+  (condition "(A.NetName == '+100V' || A.NetName == '-100V' || A.NetName == '-100+12V' || A.NetName == 'Net-(D4-K)' || A.NetName == 'Net-(D4-A)' || A.NetName == 'Net-(JP4-B)' || A.NetName == 'levelshift_out' || A.NetName == 'Net-(D3-A)' || A.NetName == 'Net-(Q1-D)' || A.NetName == 'output_post' || A.NetName == 'Net-(J7-Pin_1)' || A.NetName == 'Net-(J7-Pin_3)' || A.NetName == 'Net-(J7-Pin_5)' || A.NetName == 'Net-(J7-Pin_7)' || A.NetName == 'Net-(C32-Pad1)') && !(B.NetName == '+100V' || B.NetName == '-100V' || B.NetName == '-100+12V' || B.NetName == 'Net-(D4-K)' || B.NetName == 'Net-(D4-A)' || B.NetName == 'Net-(JP4-B)' || B.NetName == 'levelshift_out' || B.NetName == 'Net-(D3-A)' || B.NetName == 'Net-(Q1-D)' || B.NetName == 'output_post' || B.NetName == 'Net-(J7-Pin_1)' || B.NetName == 'Net-(J7-Pin_3)' || B.NetName == 'Net-(J7-Pin_5)' || B.NetName == 'Net-(J7-Pin_7)' || B.NetName == 'Net-(C32-Pad1)')"))
+
+# (a) +HV against -HV and output nets: 288-300 V -> A6 0.8 mm
+(rule "PosHV_vs_NegHV_output_A6"
+  (constraint clearance (min 0.8mm))
+  (condition "(A.NetName == '+100V') && (B.NetName == '-100V' || B.NetName == '-100+12V' || B.NetName == 'Net-(D4-K)' || B.NetName == 'Net-(D4-A)' || B.NetName == 'Net-(JP4-B)' || B.NetName == 'levelshift_out' || B.NetName == 'Net-(D3-A)' || B.NetName == 'Net-(Q1-D)' || B.NetName == 'output_post' || B.NetName == 'Net-(J7-Pin_1)' || B.NetName == 'Net-(J7-Pin_3)' || B.NetName == 'Net-(J7-Pin_5)' || B.NetName == 'Net-(J7-Pin_7)' || B.NetName == 'Net-(C32-Pad1)')"))
+
+# (c) output nets against everything else, including the other output channels: <= 300 V -> A6 0.8 mm
+(rule "Output_vs_all_A6"
+  (constraint clearance (min 0.8mm))
+  (condition "(A.NetName == 'Net-(Q1-D)' || A.NetName == 'output_post' || A.NetName == 'Net-(J7-Pin_1)' || A.NetName == 'Net-(J7-Pin_3)' || A.NetName == 'Net-(J7-Pin_5)' || A.NetName == 'Net-(J7-Pin_7)' || A.NetName == 'Net-(C32-Pad1)')"))
+
+# Same pairs as (a)-(c) when BOTH sides are mask-covered (track / arc / tented via / zone fill): B4 0.4 mm
+(rule "HV_mask_covered_B4"
+  (constraint clearance (min 0.4mm))
+  (condition "(A.Type == 'Track' || A.Type == 'Arc' || A.Type == 'Via' || A.Type == 'Zone') && (B.Type == 'Track' || B.Type == 'Arc' || B.Type == 'Via' || B.Type == 'Zone') && (((A.NetName == '+100V' || A.NetName == '-100V' || A.NetName == '-100+12V' || A.NetName == 'Net-(D4-K)' || A.NetName == 'Net-(D4-A)' || A.NetName == 'Net-(JP4-B)' || A.NetName == 'levelshift_out' || A.NetName == 'Net-(D3-A)' || A.NetName == 'Net-(Q1-D)' || A.NetName == 'output_post' || A.NetName == 'Net-(J7-Pin_1)' || A.NetName == 'Net-(J7-Pin_3)' || A.NetName == 'Net-(J7-Pin_5)' || A.NetName == 'Net-(J7-Pin_7)' || A.NetName == 'Net-(C32-Pad1)') && !(B.NetName == '+100V' || B.NetName == '-100V' || B.NetName == '-100+12V' || B.NetName == 'Net-(D4-K)' || B.NetName == 'Net-(D4-A)' || B.NetName == 'Net-(JP4-B)' || B.NetName == 'levelshift_out' || B.NetName == 'Net-(D3-A)' || B.NetName == 'Net-(Q1-D)' || B.NetName == 'output_post' || B.NetName == 'Net-(J7-Pin_1)' || B.NetName == 'Net-(J7-Pin_3)' || B.NetName == 'Net-(J7-Pin_5)' || B.NetName == 'Net-(J7-Pin_7)' || B.NetName == 'Net-(C32-Pad1)')) || ((A.NetName == '+100V') && (B.NetName == '-100V' || B.NetName == '-100+12V' || B.NetName == 'Net-(D4-K)' || B.NetName == 'Net-(D4-A)' || B.NetName == 'Net-(JP4-B)' || B.NetName == 'levelshift_out' || B.NetName == 'Net-(D3-A)' || B.NetName == 'Net-(Q1-D)' || B.NetName == 'output_post' || B.NetName == 'Net-(J7-Pin_1)' || B.NetName == 'Net-(J7-Pin_3)' || B.NetName == 'Net-(J7-Pin_5)' || B.NetName == 'Net-(J7-Pin_7)' || B.NetName == 'Net-(C32-Pad1)')) || (A.NetName == 'Net-(Q1-D)' || A.NetName == 'output_post' || A.NetName == 'Net-(J7-Pin_1)' || A.NetName == 'Net-(J7-Pin_3)' || A.NetName == 'Net-(J7-Pin_5)' || A.NetName == 'Net-(J7-Pin_7)' || A.NetName == 'Net-(C32-Pad1)'))"))
+
+# Zone fill can always pull back, so give it margin (>= 1.25 x IPC): the GND pour keeps 0.5 mm
+# from HV tracks/vias (its own zone clearance; without this rule the B4 rule above would let it
+# come to 0.4 mm) and 1.0 mm from exposed HV pads.
+(rule "Pour_vs_HV_track_margin"
+  (constraint clearance (min 0.5mm))
+  (condition "A.Type == 'Zone' && (B.Type == 'Track' || B.Type == 'Arc' || B.Type == 'Via') && (B.NetName == '+100V' || B.NetName == '-100V' || B.NetName == '-100+12V' || B.NetName == 'Net-(D4-K)' || B.NetName == 'Net-(D4-A)' || B.NetName == 'Net-(JP4-B)' || B.NetName == 'levelshift_out' || B.NetName == 'Net-(D3-A)' || B.NetName == 'Net-(Q1-D)' || B.NetName == 'output_post' || B.NetName == 'Net-(J7-Pin_1)' || B.NetName == 'Net-(J7-Pin_3)' || B.NetName == 'Net-(J7-Pin_5)' || B.NetName == 'Net-(J7-Pin_7)' || B.NetName == 'Net-(C32-Pad1)')"))
+(rule "Pour_vs_HV_pad_margin"
+  (constraint clearance (min 1.0mm))
+  (condition "A.Type == 'Zone' && B.Type == 'Pad' && (B.NetName == '+100V' || B.NetName == '-100V' || B.NetName == '-100+12V' || B.NetName == 'Net-(D4-K)' || B.NetName == 'Net-(D4-A)' || B.NetName == 'Net-(JP4-B)' || B.NetName == 'levelshift_out' || B.NetName == 'Net-(D3-A)' || B.NetName == 'Net-(Q1-D)' || B.NetName == 'output_post' || B.NetName == 'Net-(J7-Pin_1)' || B.NetName == 'Net-(J7-Pin_3)' || B.NetName == 'Net-(J7-Pin_5)' || B.NetName == 'Net-(J7-Pin_7)' || B.NetName == 'Net-(C32-Pad1)')"))
+
+# Board edge: HV pads keep A6 0.8 mm, HV tracks/vias keep 0.6 mm (B2; the routed edge is bare).
+(rule "HV_pad_edge_A6"
+  (constraint edge_clearance (min 0.8mm))
+  (condition "A.Type == 'Pad' && (A.NetName == '+100V' || A.NetName == '-100V' || A.NetName == '-100+12V' || A.NetName == 'Net-(D4-K)' || A.NetName == 'Net-(D4-A)' || A.NetName == 'Net-(JP4-B)' || A.NetName == 'levelshift_out' || A.NetName == 'Net-(D3-A)' || A.NetName == 'Net-(Q1-D)' || A.NetName == 'output_post' || A.NetName == 'Net-(J7-Pin_1)' || A.NetName == 'Net-(J7-Pin_3)' || A.NetName == 'Net-(J7-Pin_5)' || A.NetName == 'Net-(J7-Pin_7)' || A.NetName == 'Net-(C32-Pad1)')"))
+(rule "HV_track_edge_B2"
+  (constraint edge_clearance (min 0.6mm))
+  (condition "(A.Type == 'Track' || A.Type == 'Arc' || A.Type == 'Via') && (A.NetName == '+100V' || A.NetName == '-100V' || A.NetName == '-100+12V' || A.NetName == 'Net-(D4-K)' || A.NetName == 'Net-(D4-A)' || A.NetName == 'Net-(JP4-B)' || A.NetName == 'levelshift_out' || A.NetName == 'Net-(D3-A)' || A.NetName == 'Net-(Q1-D)' || A.NetName == 'output_post' || A.NetName == 'Net-(J7-Pin_1)' || A.NetName == 'Net-(J7-Pin_3)' || A.NetName == 'Net-(J7-Pin_5)' || A.NetName == 'Net-(J7-Pin_7)' || A.NetName == 'Net-(C32-Pad1)')"))
+
+# ---------------------------------------------------------------------------------------------
+# No exceptions.  The first version of this file carried four known-shortfall overrides; their
+# causes were fixed in the safety revision:
+#   Q1, Q3  TO-220 pad gap 0.635 mm -> Library:TO-220-3_Vertical_HV, 1.55 mm pads, 0.99 mm gap
+#   C32     0603 (0.65 mm gap) -> 1206 (1.8 mm gap); fit only a >= 250 V part
+#   TP12    0.60 mm from the board edge -> moved inboard (>= 1.0 mm)
+# Connector pinouts now never put more than 150 V between neighbouring pins:
+#   J5/J6  1 +100V  2 GND  3 -100V  4 -100+12V
+#   J7/J8  1 OUT1  2 GND  3 OUT2  4 GND  5 OUT3  6 GND  7 OUT4
+#   J9     1 GND  2 +12V  3 -12V  4 GND  5 +100V  6 GND  7 -100V  8 -100+12V   (3.50 mm pluggable terminal block)
+# Neighbouring 2.54 mm pins with 1.7 mm pads leave 0.84 mm (A6 0.8 mm, 5 % margin) at <= 150 V.
+# JP8-JP11 pin A (output_post) to pin B (OUTn) can still see 300 V across 0.84 mm: that is within
+# the 251-300 V band (0.8 mm) with the same 5 % margin.
