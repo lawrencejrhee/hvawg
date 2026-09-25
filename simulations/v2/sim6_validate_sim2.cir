@@ -1,0 +1,37 @@
+* SIM 6 validation: sim2_classA_v2_irf730.cir VAR=3 Cload=10p Cz=45p rebuilt by sim6_run.py
+* (R22=50, ideal rails, no R18, single R2 10k, cshunt=1e-12, SINE(0.75 0.75 100k)).
+* Expected from sim2_classA_v2_irf730.log step 4: tp5_pp 278.64, tp6_pp 278.22, tp5_max 141.69, tp5_min -136.95
+V2 IN NHV SINE(0.75 0.75 100k)
+XU7 IN SRC VCC NHV OA LM8261
+Rg1 OA G 1
+M1 TP5 G SRC SRC IRF730_APPROX
+R22 SRC NHV 50
+* --- V2 gate protection (R28 100k G-S, D4 BZT52C12 cathode on G via 1 ohm)
+R28 G SRC 100k
+RZS G DK 1
+D4 SRC DK DZ12
+* R18 omitted (sim2 reproduction)
+R2 PHV TP5 10k
+* --- R31 4.7k to TP6, scope 10Meg || Cload at TP6
+R31 TP5 TP6 4.7k
+C1 TP6 0 10p
+RSCOPE TP6 0 10Meg
+V3 PHV 0 150
+V_neg NHV 0 -150
+* floating 12 V op-amp supply referenced to -HV (as sim2)
+V1 N12 NHV 12
+R1 N12 VCC 1
+
+.tran 0 50u 30u 5n
+.options method=gear plotwinsize=0 gminsteps=500 cshunt=1e-12 itl4=500
+.meas tran tp5_max max V(TP5)
+.meas tran tp5_min min V(TP5)
+.meas tran tp5_pp pp V(TP5)
+.meas tran tp6_pp pp V(TP6)
+* --- models (copied verbatim from sim2_classA_v2_irf730.cir; Cz = 45p nominal) ---
+.param Cz=45p
+.model DZ12 D(Is=1e-14 Rs=5 BV=12 Ibv=5m Cjo={Cz} M=0.4 Vj=0.75)
+* IRF730 is NOT in LTspice's library. APPROXIMATION built from typical datasheet values (see sim2).
+.model IRF730_APPROX VDMOS(Rg=2 Vto=3.5 Kp=2 Lambda=0.003 Rd=0.7 Rs=0.05 Rb=0.2 Cgdmax=0.8n Cgdmin=50p A=1 Cgs=620p Cjo=640p M=0.5 Vj=0.7 Is=20p BV=400 IBV=250u ksubthres=0.1 mfg=approximation Vds=400 Ron=1 Qg=38n)
+.include C:/Users/lawre/OneDrive/Desktop/pister_project/hvawg/simulations/LM8261.MOD
+.end

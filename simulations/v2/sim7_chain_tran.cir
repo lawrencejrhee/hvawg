@@ -1,0 +1,153 @@
+* HVAWG -- SIM 7h: FULL signal chain, FINAL V2 values, dynamic: zero-input, step, 100 kHz sine
+* ==========================================================================
+* Same circuit as sim7_chain_dc.cir (DAC0808 current sink + U4A + R11, U6/Q3 level shifter with
+*   R29 = 1 Meg, monitor with R30 = 22k + U8A NE5532, U7/Q1 output stage with R22 = 75,
+*   R28/D4/R18, R21 10k, R31 4.7k, CL at TP6).  RV1 is FIXED at RFIX = the value the Sim 7a
+*   servo found for this rail (i.e. the board as trimmed on the bench).
+* Never simulated before as one chain: Sim 2 drove the output stage from an ideal source,
+*   Sim 3 ran the level shifter into a 5 pF node, and Sims 1/5 were DC only at +/-50/+/-120 V.
+* All signal timing below is offset by T0 = 100 us (power-up + settle).
+* MODEW = 0: code 128 held to T0+30 us (zero-input window T0+15..30 us), +5 codes at T0+30 us
+*            (V_DAC -49 mV, out ~ -4.9 V), back at T0+50 us, end T0+70 us.
+* MODEW = 1: code 128 held to T0+10 us, then code = 128 - ACOD*sin(2 pi 100k (t-T0-10u)), 10 periods.
+*            ACOD = 127 codes = the full DAC range (V_DAC +/-1.24 V -> out ~ +/-124 V at +/-150 V).
+* START-UP / .op: the DC .op search with 5 op-amp macro-models is a lottery (the same netlist may
+*   converge in 5 s or give up after 140 s), so sim7_run.py tries up to three routes and records which
+*   one worked (all three end in the same DC state before anything is measured):
+*   1. plain .op with the .nodeset hints below;
+*   2. HV homotopy: .op solved at HV0 = 150 V (where it converges reliably), then the rails ramp
+*      to HV during 10-50 us;
+*   3. '.tran ... startup' (all sources ramp up from 0 in 20 us; nodesets removed).
+*   In every route Bpre pre-charges the 10 uF tap cap C15 to the divider value of the momentary
+*   rail (incl. the ~0.5 uA U8 bias drop) until 95 us, so its 11 ms time constant is not waited out.
+* ==========================================================================
+.param HV=150
+.param HV0={HV}
+.param IBX=0
+.param X2=290
+.param VTQ3=-3
+.param R29V=1Meg
+.param R30V=22k
+.param R22V=75
+.param RFIX=3580
+.param CL=20p
+.param MODEW=0
+.param ACOD=127
+.param Cz=45p
+.param rb=820+X2
+
+.include ../LM8261.MOD
+.include ../NE5532.MOD
+.model IRF9610_APPROX VDMOS(pchan Vto={VTQ3} Kp=0.6 Lambda=0.003 Rd=2.2 Rs=0.5 Rb=0.5 Cgdmax=120p Cgdmin=8p Cgs=155p Cjo=60p Is=1e-12 ksubthres=0.1 mfg=approximation Vds=-200 Ron=3 Qg=11n)
+.model IRF730_APPROX VDMOS(Rg=2 Vto=3.5 Kp=2 Lambda=0.003 Rd=0.7 Rs=0.05 Rb=0.2 Cgdmax=0.8n Cgdmin=50p A=1 Cgs=620p Cjo=640p M=0.5 Vj=0.7 Is=20p BV=400 IBV=250u ksubthres=0.1 mfg=approximation Vds=400 Ron=1 Qg=38n)
+.model DZ12 D(Is=1e-14 Rs=5 BV=12 Ibv=5m Cjo={Cz} M=0.4 Vj=0.75)
+.model DESD D(Is=1e-15 Rs=10)
+
+Vhp  hvp0 0 PWL(0 {HV0} 10u {HV0} 50u {HV})
+Rhp  hvp0 hvp 1
+Vhn  hvn0 0 PWL(0 {-HV0} 10u {-HV0} 50u {-HV})
+Rhn  hvn0 hvn 1
+C26  hvp 0 4.7u Rser=0.5
+C27  0 hvn 4.7u Rser=0.5
+Vfl  hvn12a hvn 12
+Rfl  hvn12a hvn12 1
+C24  hvn12 hvn 10u Rser=10m
+C25  hvn12 hvn 100n Rser=50m
+R15  hvn12 hvn 1Meg
+Vp12 vp12a 0 12
+Rp12 vp12a vp12 1
+Vm12 vm12a 0 -12
+Rm12 vm12a vm12 1
+V5   v5a 0 5
+R5v  v5a v5 1
+
+R7   v5 n78 2.7k
+R8   n78 n89 2.7k
+R9   n89 ref 2.7k
+R10  ref 0 2.7k
+XU4  ref u4o vp12 vm12 u4o NE5532
+R11  u4o dac 2.7k
+Bdac dac 0 I=V(code)/256*V(v5)/5.4k
+Vstp stp 0 PWL(0 128 130u 128 130.02u 133 150u 133 150.02u 128)
+Bcode code 0 V=if(MODEW, 128-ACOD*sin(2*pi*1e5*max(time-110u,0)), V(stp))
+
+R12  hvp tap 110k
+Rbot tap 0 {rb}
+C14  tap 0 100n
+C15  tap 0 10u Rser=10m
+Bpre tap 0 I=if(time<95u, 10*(V(tap)-(V(hvp)*rb/(110000+rb)-(0.5u+IBX)*110000*rb/(110000+rb))), 0)
+R30  tap u8p {R30V}
+XU8  u8p tp3 vp12 vm12 tp3 NE5532
+
+Rrv1 tp3 s {RFIX}
+XU6  dac s vp12 vm12 gq3 LM8261
+MQ3  dq3 gq3 s IRF9610_APPROX
+Viq3 dq3 tp4 0
+R17  tp4 hvn 2.7k
+Ctp4 tp4 hvn 5p
+R29  s gq3 {R29V}
+D5   gq3 d5k DZ12
+Vd5  d5k s 0
+
+XU7  tp4 src1 hvn12 hvn g1 LM8261
+Desdp tp4 hvn12 DESD
+Desdn hvn tp4 DESD
+MQ1  dq1 g1 src1 IRF730_APPROX
+Viq1 out dq1 0
+R22  src1 hvn {R22V}
+R28  g1 src1 100k
+D4   src1 d4k DZ12
+Vd4  d4k g1 0
+R18  g1 hvn 1Meg
+R21  hvp out 10k
+R31  out opost 4.7k
+Rscope opost 0 10Meg
+CLd  opost 0 {CL}
+
+Bid4 id4 0 V=-I(Vd4)
+Bid5 id5 0 V=-I(Vd5)
+Biq3 iq3 0 V=I(Viq3)
+
+.nodeset V(tp3)={HV0*rb/(110000+rb)} V(tap)={HV0*rb/(110000+rb)} V(u8p)={HV0*rb/(110000+rb)} V(s)=0 V(dac)=0 V(u4o)=1.25 V(ref)=1.25 V(tp4)={-HV0+HV0/10000*R22V} V(src1)={-HV0+HV0/10000*R22V} V(g1)={-HV0+HV0/10000*R22V+3.6} V(out)=0
+.nodeset V(gq3)={VTQ3+0.1} V(n78)=3.75 V(n89)=2.5 V(hvn12)={-HV0+12} V(opost)=0 V(dq1)=0 V(dq3)={-HV0+HV0/10000*R22V}
+.tran 0 {if(MODEW,210u,170u)} 0 5n
+.options plotwinsize=0 numdgt=15 measdgt=7 itl4=100
+.four 100k 9 3 V(opost)
+
+* ---- MODEW = 0 : zero input + step ----
+.meas TRAN out_c AVG V(out) FROM 105u TO 110u
+.meas TRAN pp5_zero PP V(out) FROM 115u TO 130u
+.meas TRAN pp6_zero PP V(opost) FROM 115u TO 130u
+.meas TRAN pp4_zero PP V(tp4) FROM 115u TO 130u
+.meas TRAN ppg_zero PP V(gq3) FROM 115u TO 130u
+.meas TRAN v_pre AVG V(out) FROM 125u TO 130u
+.meas TRAN v_post AVG V(out) FROM 145u TO 150u
+.meas TRAN v_end AVG V(out) FROM 165u TO 170u
+.meas TRAN vmin_step MIN V(out) FROM 130u TO 145u
+.meas TRAN vmax_ret MAX V(out) FROM 150u TO 165u
+.meas TRAN over_pct PARAM 100*(v_post-vmin_step)/(v_pre-v_post)
+.meas TRAN over2_pct PARAM 100*(vmax_ret-v_end)/(v_end-v_post)
+.meas TRAN pp5_post PP V(out) FROM 140u TO 150u
+.meas TRAN pp5_end PP V(out) FROM 160u TO 170u
+* U7 loop (Q1 source) ripple: zero input, after the step, after the return step
+.meas TRAN pps1_zero PP V(src1) FROM 115u TO 130u
+.meas TRAN pps1_post PP V(src1) FROM 140u TO 150u
+.meas TRAN pps1_end PP V(src1) FROM 160u TO 170u
+.meas TRAN t_set1 WHEN V(out)=v_post+0.02*(v_pre-v_post) TD=130u FALL=1
+.meas TRAN t_set2 WHEN V(out)=v_end-0.02*(v_end-v_post) TD=150u RISE=1
+* ---- MODEW = 1 : 100 kHz full-range sine (last 5 periods) ----
+.meas TRAN o_max MAX V(out) FROM 160u TO 210u
+.meas TRAN o_min MIN V(out) FROM 160u TO 210u
+.meas TRAN o6_max MAX V(opost) FROM 160u TO 210u
+.meas TRAN o6_min MIN V(opost) FROM 160u TO 210u
+.meas TRAN o6_pp PP V(opost) FROM 160u TO 210u
+.meas TRAN tp4r_min MIN V(tp4)-V(hvn) FROM 160u TO 210u
+.meas TRAN tp4r_max MAX V(tp4)-V(hvn) FROM 160u TO 210u
+.meas TRAN iq3_min MIN V(iq3) FROM 160u TO 210u
+.meas TRAN vgs1_max MAX V(g1)-V(src1) FROM 160u TO 210u
+.meas TRAN vgs3_min MIN V(gq3)-V(s) FROM 160u TO 210u
+.meas TRAN vgs3_max MAX V(gq3)-V(s) FROM 160u TO 210u
+.meas TRAN id4max MAX V(id4) FROM 101u TO 210u
+.meas TRAN id5max MAX V(id5) FROM 101u TO 210u
+.meas TRAN id5min MIN V(id5) FROM 101u TO 210u
+.end

@@ -1,0 +1,481 @@
+* sim4_monitor_fault.cir -- HVAWG HV-monitor (R12/RV2/U8) input-stress under faults, V1 vs V2
+* Each instance is an independent copy of the monitor with its own U8 rails; all share the
+* swept +HV source (VHV, 1 ohm) except the R12-bypass cases, which get their own copy (EHV*).
+* U8 (NE5532) + input modelled as its protection structure: D inp->VCC, D VEE->inp,
+* anti-parallel differential diodes inp<->out (enabled by DIFF=1), 100k inp->out.
+* Powered: +/-12 V ideal + 1 ohm; output = follower clamped +/-10.5 V (1 ohm).
+* Unpowered: each rail {RR} to GND (off bench supply + other ICs); output 1k to GND.
+.param RR=1k DIFF=0
+.model DCL D(Is=2.52n Rs=0.568 N=1.752)
+VHV hvs 0 150
+RHV hvs hv 1
+.subckt U8IN inp vcc vee params: PWR=1
+D1 inp vcc DCL
+D2 vee inp DCL
+Rio inp out 100k
+Dd1 inp dd1 DCL
+Dd2 out dd2 DCL
+Rdd1 dd1 out {1+(1-DIFF)*1e12}
+Rdd2 dd2 inp {1+(1-DIFF)*1e12}
+Bo o1 0 V={PWR}*limit(V(inp),-10.5,10.5)
+Ro o1 out {PWR*1+(1-PWR)*1000}
+.ends
+.subckt RAILP vcc vee
+Vp vp 0 12
+Rp vp vcc 1
+Vn vn 0 -12
+Rn vn vee 1
+.ends
+.subckt RAILU vcc vee
+Rp vcc 0 {RR}
+Rn vee 0 {RR}
+.ends
+* --- v1n_p: V1 normal, powered (RV2=1.11k)
+R12_v1n_p hv tap_v1n_p 110k
+Rbot_v1n_p tap_v1n_p 0 1.11k
+Vi_v1n_p tap_v1n_p inp_v1n_p 0
+XU_v1n_p inp_v1n_p vcc_v1n_p vee_v1n_p U8IN params: PWR=1
+XR_v1n_p vcc_v1n_p vee_v1n_p RAILP
+* --- v1n_u: V1 shutdown fault: +HV on, +/-12V off
+R12_v1n_u hv tap_v1n_u 110k
+Rbot_v1n_u tap_v1n_u 0 1.11k
+Vi_v1n_u tap_v1n_u inp_v1n_u 0
+XU_v1n_u inp_v1n_u vcc_v1n_u vee_v1n_u U8IN params: PWR=0
+XR_v1n_u vcc_v1n_u vee_v1n_u RAILU
+* --- v1w_p: V1 RV2 wiper open, powered
+R12_v1w_p hv tap_v1w_p 110k
+Vi_v1w_p tap_v1w_p inp_v1w_p 0
+XU_v1w_p inp_v1w_p vcc_v1w_p vee_v1w_p U8IN params: PWR=1
+XR_v1w_p vcc_v1w_p vee_v1w_p RAILP
+* --- v1w_u: V1 RV2 wiper open, unpowered
+R12_v1w_u hv tap_v1w_u 110k
+Vi_v1w_u tap_v1w_u inp_v1w_u 0
+XU_v1w_u inp_v1w_u vcc_v1w_u vee_v1w_u U8IN params: PWR=0
+XR_v1w_u vcc_v1w_u vee_v1w_u RAILU
+* --- v1m_p: V1 RV2 at max 4.7k, powered
+R12_v1m_p hv tap_v1m_p 110k
+Rbot_v1m_p tap_v1m_p 0 4.7k
+Vi_v1m_p tap_v1m_p inp_v1m_p 0
+XU_v1m_p inp_v1m_p vcc_v1m_p vee_v1m_p U8IN params: PWR=1
+XR_v1m_p vcc_v1m_p vee_v1m_p RAILP
+* --- v1m_u: V1 RV2 at max 4.7k, unpowered
+R12_v1m_u hv tap_v1m_u 110k
+Rbot_v1m_u tap_v1m_u 0 4.7k
+Vi_v1m_u tap_v1m_u inp_v1m_u 0
+XU_v1m_u inp_v1m_u vcc_v1m_u vee_v1m_u U8IN params: PWR=0
+XR_v1m_u vcc_v1m_u vee_v1m_u RAILU
+* --- v2n_p: V2 normal, powered (RV2 290 + R27 820)
+R12_v2n_p hv tap_v2n_p 110k
+Rbot_v2n_p tap_v2n_p 0 1110
+R30_v2n_p tap_v2n_p pin_v2n_p 10k
+Vi_v2n_p pin_v2n_p inp_v2n_p 0
+XU_v2n_p inp_v2n_p vcc_v2n_p vee_v2n_p U8IN params: PWR=1
+XR_v2n_p vcc_v2n_p vee_v2n_p RAILP
+* --- v2n_u: V2 shutdown fault: +HV on, +/-12V off
+R12_v2n_u hv tap_v2n_u 110k
+Rbot_v2n_u tap_v2n_u 0 1110
+R30_v2n_u tap_v2n_u pin_v2n_u 10k
+Vi_v2n_u pin_v2n_u inp_v2n_u 0
+XU_v2n_u inp_v2n_u vcc_v2n_u vee_v2n_u U8IN params: PWR=0
+XR_v2n_u vcc_v2n_u vee_v2n_u RAILU
+* --- v2w_p: V2 RV2 wiper open (=RV2 max): 1k+820, powered
+R12_v2w_p hv tap_v2w_p 110k
+Rbot_v2w_p tap_v2w_p 0 1820
+R30_v2w_p tap_v2w_p pin_v2w_p 10k
+Vi_v2w_p pin_v2w_p inp_v2w_p 0
+XU_v2w_p inp_v2w_p vcc_v2w_p vee_v2w_p U8IN params: PWR=1
+XR_v2w_p vcc_v2w_p vee_v2w_p RAILP
+* --- v2w_u: V2 RV2 wiper open (=RV2 max), unpowered
+R12_v2w_u hv tap_v2w_u 110k
+Rbot_v2w_u tap_v2w_u 0 1820
+R30_v2w_u tap_v2w_u pin_v2w_u 10k
+Vi_v2w_u pin_v2w_u inp_v2w_u 0
+XU_v2w_u inp_v2w_u vcc_v2w_u vee_v2w_u U8IN params: PWR=0
+XR_v2w_u vcc_v2w_u vee_v2w_u RAILU
+* --- i3_p: item 3 only (1k+820 leg, no R30), wiper open, powered
+R12_i3_p hv tap_i3_p 110k
+Rbot_i3_p tap_i3_p 0 1820
+Vi_i3_p tap_i3_p inp_i3_p 0
+XU_i3_p inp_i3_p vcc_i3_p vee_i3_p U8IN params: PWR=1
+XR_i3_p vcc_i3_p vee_i3_p RAILP
+* --- i3_u: item 3 only, wiper open, unpowered
+R12_i3_u hv tap_i3_u 110k
+Rbot_i3_u tap_i3_u 0 1820
+Vi_i3_u tap_i3_u inp_i3_u 0
+XU_i3_u inp_i3_u vcc_i3_u vee_i3_u U8IN params: PWR=0
+XR_i3_u vcc_i3_u vee_i3_u RAILU
+* --- i5_p: item 5 only (R30, no bottom leg) = V2 with R27/RV2 track open, powered
+R12_i5_p hv tap_i5_p 110k
+R30_i5_p tap_i5_p pin_i5_p 10k
+Vi_i5_p pin_i5_p inp_i5_p 0
+XU_i5_p inp_i5_p vcc_i5_p vee_i5_p U8IN params: PWR=1
+XR_i5_p vcc_i5_p vee_i5_p RAILP
+* --- i5_u: item 5 only / V2 bottom leg fully open, unpowered
+R12_i5_u hv tap_i5_u 110k
+R30_i5_u tap_i5_u pin_i5_u 10k
+Vi_i5_u pin_i5_u inp_i5_u 0
+XU_i5_u inp_i5_u vcc_i5_u vee_i5_u U8IN params: PWR=0
+XR_i5_u vcc_i5_u vee_i5_u RAILU
+* --- v1b_p: V1 R12 bypassed (tap shorted to +HV), powered
+Ev1b_p hvs_v1b_p 0 hvs 0 1
+RSv1b_p hvs_v1b_p hv_v1b_p 1
+R12_v1b_p hv_v1b_p tap_v1b_p 1   ; R12 bypassed (short)
+Rbot_v1b_p tap_v1b_p 0 1.11k
+Vi_v1b_p tap_v1b_p inp_v1b_p 0
+XU_v1b_p inp_v1b_p vcc_v1b_p vee_v1b_p U8IN params: PWR=1
+XR_v1b_p vcc_v1b_p vee_v1b_p RAILP
+* --- v1b_u: V1 R12 bypassed, unpowered
+Ev1b_u hvs_v1b_u 0 hvs 0 1
+RSv1b_u hvs_v1b_u hv_v1b_u 1
+R12_v1b_u hv_v1b_u tap_v1b_u 1   ; R12 bypassed (short)
+Rbot_v1b_u tap_v1b_u 0 1.11k
+Vi_v1b_u tap_v1b_u inp_v1b_u 0
+XU_v1b_u inp_v1b_u vcc_v1b_u vee_v1b_u U8IN params: PWR=0
+XR_v1b_u vcc_v1b_u vee_v1b_u RAILU
+* --- v2b_p: V2 R12 bypassed (tap shorted to +HV), powered
+Ev2b_p hvs_v2b_p 0 hvs 0 1
+RSv2b_p hvs_v2b_p hv_v2b_p 1
+R12_v2b_p hv_v2b_p tap_v2b_p 1   ; R12 bypassed (short)
+Rbot_v2b_p tap_v2b_p 0 1110
+R30_v2b_p tap_v2b_p pin_v2b_p 10k
+Vi_v2b_p pin_v2b_p inp_v2b_p 0
+XU_v2b_p inp_v2b_p vcc_v2b_p vee_v2b_p U8IN params: PWR=1
+XR_v2b_p vcc_v2b_p vee_v2b_p RAILP
+* --- v2b_u: V2 R12 bypassed, unpowered
+Ev2b_u hvs_v2b_u 0 hvs 0 1
+RSv2b_u hvs_v2b_u hv_v2b_u 1
+R12_v2b_u hv_v2b_u tap_v2b_u 1   ; R12 bypassed (short)
+Rbot_v2b_u tap_v2b_u 0 1110
+R30_v2b_u tap_v2b_u pin_v2b_u 10k
+Vi_v2b_u pin_v2b_u inp_v2b_u 0
+XU_v2b_u inp_v2b_u vcc_v2b_u vee_v2b_u U8IN params: PWR=0
+XR_v2b_u vcc_v2b_u vee_v2b_u RAILU
+.dc VHV list 50 120 150
+.step param DIFF list 0 1
+.step param RR list 1k 10k
+.meas DC v1n_p_vhv_50 FIND V(hv) AT=50
+.meas DC v1n_p_vtap_50 FIND V(tap_v1n_p) AT=50
+.meas DC v1n_p_vin_50 FIND V(inp_v1n_p) AT=50
+.meas DC v1n_p_iin_50 FIND I(Vi_v1n_p) AT=50
+.meas DC v1n_p_vcc_50 FIND V(vcc_v1n_p) AT=50
+.meas DC v1n_p_vee_50 FIND V(vee_v1n_p) AT=50
+.meas DC v1n_p_vhv_120 FIND V(hv) AT=120
+.meas DC v1n_p_vtap_120 FIND V(tap_v1n_p) AT=120
+.meas DC v1n_p_vin_120 FIND V(inp_v1n_p) AT=120
+.meas DC v1n_p_iin_120 FIND I(Vi_v1n_p) AT=120
+.meas DC v1n_p_vcc_120 FIND V(vcc_v1n_p) AT=120
+.meas DC v1n_p_vee_120 FIND V(vee_v1n_p) AT=120
+.meas DC v1n_p_vhv_150 FIND V(hv) AT=150
+.meas DC v1n_p_vtap_150 FIND V(tap_v1n_p) AT=150
+.meas DC v1n_p_vin_150 FIND V(inp_v1n_p) AT=150
+.meas DC v1n_p_iin_150 FIND I(Vi_v1n_p) AT=150
+.meas DC v1n_p_vcc_150 FIND V(vcc_v1n_p) AT=150
+.meas DC v1n_p_vee_150 FIND V(vee_v1n_p) AT=150
+.meas DC v1n_u_vhv_50 FIND V(hv) AT=50
+.meas DC v1n_u_vtap_50 FIND V(tap_v1n_u) AT=50
+.meas DC v1n_u_vin_50 FIND V(inp_v1n_u) AT=50
+.meas DC v1n_u_iin_50 FIND I(Vi_v1n_u) AT=50
+.meas DC v1n_u_vcc_50 FIND V(vcc_v1n_u) AT=50
+.meas DC v1n_u_vee_50 FIND V(vee_v1n_u) AT=50
+.meas DC v1n_u_vhv_120 FIND V(hv) AT=120
+.meas DC v1n_u_vtap_120 FIND V(tap_v1n_u) AT=120
+.meas DC v1n_u_vin_120 FIND V(inp_v1n_u) AT=120
+.meas DC v1n_u_iin_120 FIND I(Vi_v1n_u) AT=120
+.meas DC v1n_u_vcc_120 FIND V(vcc_v1n_u) AT=120
+.meas DC v1n_u_vee_120 FIND V(vee_v1n_u) AT=120
+.meas DC v1n_u_vhv_150 FIND V(hv) AT=150
+.meas DC v1n_u_vtap_150 FIND V(tap_v1n_u) AT=150
+.meas DC v1n_u_vin_150 FIND V(inp_v1n_u) AT=150
+.meas DC v1n_u_iin_150 FIND I(Vi_v1n_u) AT=150
+.meas DC v1n_u_vcc_150 FIND V(vcc_v1n_u) AT=150
+.meas DC v1n_u_vee_150 FIND V(vee_v1n_u) AT=150
+.meas DC v1w_p_vhv_50 FIND V(hv) AT=50
+.meas DC v1w_p_vtap_50 FIND V(tap_v1w_p) AT=50
+.meas DC v1w_p_vin_50 FIND V(inp_v1w_p) AT=50
+.meas DC v1w_p_iin_50 FIND I(Vi_v1w_p) AT=50
+.meas DC v1w_p_vcc_50 FIND V(vcc_v1w_p) AT=50
+.meas DC v1w_p_vee_50 FIND V(vee_v1w_p) AT=50
+.meas DC v1w_p_vhv_120 FIND V(hv) AT=120
+.meas DC v1w_p_vtap_120 FIND V(tap_v1w_p) AT=120
+.meas DC v1w_p_vin_120 FIND V(inp_v1w_p) AT=120
+.meas DC v1w_p_iin_120 FIND I(Vi_v1w_p) AT=120
+.meas DC v1w_p_vcc_120 FIND V(vcc_v1w_p) AT=120
+.meas DC v1w_p_vee_120 FIND V(vee_v1w_p) AT=120
+.meas DC v1w_p_vhv_150 FIND V(hv) AT=150
+.meas DC v1w_p_vtap_150 FIND V(tap_v1w_p) AT=150
+.meas DC v1w_p_vin_150 FIND V(inp_v1w_p) AT=150
+.meas DC v1w_p_iin_150 FIND I(Vi_v1w_p) AT=150
+.meas DC v1w_p_vcc_150 FIND V(vcc_v1w_p) AT=150
+.meas DC v1w_p_vee_150 FIND V(vee_v1w_p) AT=150
+.meas DC v1w_u_vhv_50 FIND V(hv) AT=50
+.meas DC v1w_u_vtap_50 FIND V(tap_v1w_u) AT=50
+.meas DC v1w_u_vin_50 FIND V(inp_v1w_u) AT=50
+.meas DC v1w_u_iin_50 FIND I(Vi_v1w_u) AT=50
+.meas DC v1w_u_vcc_50 FIND V(vcc_v1w_u) AT=50
+.meas DC v1w_u_vee_50 FIND V(vee_v1w_u) AT=50
+.meas DC v1w_u_vhv_120 FIND V(hv) AT=120
+.meas DC v1w_u_vtap_120 FIND V(tap_v1w_u) AT=120
+.meas DC v1w_u_vin_120 FIND V(inp_v1w_u) AT=120
+.meas DC v1w_u_iin_120 FIND I(Vi_v1w_u) AT=120
+.meas DC v1w_u_vcc_120 FIND V(vcc_v1w_u) AT=120
+.meas DC v1w_u_vee_120 FIND V(vee_v1w_u) AT=120
+.meas DC v1w_u_vhv_150 FIND V(hv) AT=150
+.meas DC v1w_u_vtap_150 FIND V(tap_v1w_u) AT=150
+.meas DC v1w_u_vin_150 FIND V(inp_v1w_u) AT=150
+.meas DC v1w_u_iin_150 FIND I(Vi_v1w_u) AT=150
+.meas DC v1w_u_vcc_150 FIND V(vcc_v1w_u) AT=150
+.meas DC v1w_u_vee_150 FIND V(vee_v1w_u) AT=150
+.meas DC v1m_p_vhv_50 FIND V(hv) AT=50
+.meas DC v1m_p_vtap_50 FIND V(tap_v1m_p) AT=50
+.meas DC v1m_p_vin_50 FIND V(inp_v1m_p) AT=50
+.meas DC v1m_p_iin_50 FIND I(Vi_v1m_p) AT=50
+.meas DC v1m_p_vcc_50 FIND V(vcc_v1m_p) AT=50
+.meas DC v1m_p_vee_50 FIND V(vee_v1m_p) AT=50
+.meas DC v1m_p_vhv_120 FIND V(hv) AT=120
+.meas DC v1m_p_vtap_120 FIND V(tap_v1m_p) AT=120
+.meas DC v1m_p_vin_120 FIND V(inp_v1m_p) AT=120
+.meas DC v1m_p_iin_120 FIND I(Vi_v1m_p) AT=120
+.meas DC v1m_p_vcc_120 FIND V(vcc_v1m_p) AT=120
+.meas DC v1m_p_vee_120 FIND V(vee_v1m_p) AT=120
+.meas DC v1m_p_vhv_150 FIND V(hv) AT=150
+.meas DC v1m_p_vtap_150 FIND V(tap_v1m_p) AT=150
+.meas DC v1m_p_vin_150 FIND V(inp_v1m_p) AT=150
+.meas DC v1m_p_iin_150 FIND I(Vi_v1m_p) AT=150
+.meas DC v1m_p_vcc_150 FIND V(vcc_v1m_p) AT=150
+.meas DC v1m_p_vee_150 FIND V(vee_v1m_p) AT=150
+.meas DC v1m_u_vhv_50 FIND V(hv) AT=50
+.meas DC v1m_u_vtap_50 FIND V(tap_v1m_u) AT=50
+.meas DC v1m_u_vin_50 FIND V(inp_v1m_u) AT=50
+.meas DC v1m_u_iin_50 FIND I(Vi_v1m_u) AT=50
+.meas DC v1m_u_vcc_50 FIND V(vcc_v1m_u) AT=50
+.meas DC v1m_u_vee_50 FIND V(vee_v1m_u) AT=50
+.meas DC v1m_u_vhv_120 FIND V(hv) AT=120
+.meas DC v1m_u_vtap_120 FIND V(tap_v1m_u) AT=120
+.meas DC v1m_u_vin_120 FIND V(inp_v1m_u) AT=120
+.meas DC v1m_u_iin_120 FIND I(Vi_v1m_u) AT=120
+.meas DC v1m_u_vcc_120 FIND V(vcc_v1m_u) AT=120
+.meas DC v1m_u_vee_120 FIND V(vee_v1m_u) AT=120
+.meas DC v1m_u_vhv_150 FIND V(hv) AT=150
+.meas DC v1m_u_vtap_150 FIND V(tap_v1m_u) AT=150
+.meas DC v1m_u_vin_150 FIND V(inp_v1m_u) AT=150
+.meas DC v1m_u_iin_150 FIND I(Vi_v1m_u) AT=150
+.meas DC v1m_u_vcc_150 FIND V(vcc_v1m_u) AT=150
+.meas DC v1m_u_vee_150 FIND V(vee_v1m_u) AT=150
+.meas DC v2n_p_vhv_50 FIND V(hv) AT=50
+.meas DC v2n_p_vtap_50 FIND V(tap_v2n_p) AT=50
+.meas DC v2n_p_vin_50 FIND V(inp_v2n_p) AT=50
+.meas DC v2n_p_iin_50 FIND I(Vi_v2n_p) AT=50
+.meas DC v2n_p_vcc_50 FIND V(vcc_v2n_p) AT=50
+.meas DC v2n_p_vee_50 FIND V(vee_v2n_p) AT=50
+.meas DC v2n_p_vhv_120 FIND V(hv) AT=120
+.meas DC v2n_p_vtap_120 FIND V(tap_v2n_p) AT=120
+.meas DC v2n_p_vin_120 FIND V(inp_v2n_p) AT=120
+.meas DC v2n_p_iin_120 FIND I(Vi_v2n_p) AT=120
+.meas DC v2n_p_vcc_120 FIND V(vcc_v2n_p) AT=120
+.meas DC v2n_p_vee_120 FIND V(vee_v2n_p) AT=120
+.meas DC v2n_p_vhv_150 FIND V(hv) AT=150
+.meas DC v2n_p_vtap_150 FIND V(tap_v2n_p) AT=150
+.meas DC v2n_p_vin_150 FIND V(inp_v2n_p) AT=150
+.meas DC v2n_p_iin_150 FIND I(Vi_v2n_p) AT=150
+.meas DC v2n_p_vcc_150 FIND V(vcc_v2n_p) AT=150
+.meas DC v2n_p_vee_150 FIND V(vee_v2n_p) AT=150
+.meas DC v2n_u_vhv_50 FIND V(hv) AT=50
+.meas DC v2n_u_vtap_50 FIND V(tap_v2n_u) AT=50
+.meas DC v2n_u_vin_50 FIND V(inp_v2n_u) AT=50
+.meas DC v2n_u_iin_50 FIND I(Vi_v2n_u) AT=50
+.meas DC v2n_u_vcc_50 FIND V(vcc_v2n_u) AT=50
+.meas DC v2n_u_vee_50 FIND V(vee_v2n_u) AT=50
+.meas DC v2n_u_vhv_120 FIND V(hv) AT=120
+.meas DC v2n_u_vtap_120 FIND V(tap_v2n_u) AT=120
+.meas DC v2n_u_vin_120 FIND V(inp_v2n_u) AT=120
+.meas DC v2n_u_iin_120 FIND I(Vi_v2n_u) AT=120
+.meas DC v2n_u_vcc_120 FIND V(vcc_v2n_u) AT=120
+.meas DC v2n_u_vee_120 FIND V(vee_v2n_u) AT=120
+.meas DC v2n_u_vhv_150 FIND V(hv) AT=150
+.meas DC v2n_u_vtap_150 FIND V(tap_v2n_u) AT=150
+.meas DC v2n_u_vin_150 FIND V(inp_v2n_u) AT=150
+.meas DC v2n_u_iin_150 FIND I(Vi_v2n_u) AT=150
+.meas DC v2n_u_vcc_150 FIND V(vcc_v2n_u) AT=150
+.meas DC v2n_u_vee_150 FIND V(vee_v2n_u) AT=150
+.meas DC v2w_p_vhv_50 FIND V(hv) AT=50
+.meas DC v2w_p_vtap_50 FIND V(tap_v2w_p) AT=50
+.meas DC v2w_p_vin_50 FIND V(inp_v2w_p) AT=50
+.meas DC v2w_p_iin_50 FIND I(Vi_v2w_p) AT=50
+.meas DC v2w_p_vcc_50 FIND V(vcc_v2w_p) AT=50
+.meas DC v2w_p_vee_50 FIND V(vee_v2w_p) AT=50
+.meas DC v2w_p_vhv_120 FIND V(hv) AT=120
+.meas DC v2w_p_vtap_120 FIND V(tap_v2w_p) AT=120
+.meas DC v2w_p_vin_120 FIND V(inp_v2w_p) AT=120
+.meas DC v2w_p_iin_120 FIND I(Vi_v2w_p) AT=120
+.meas DC v2w_p_vcc_120 FIND V(vcc_v2w_p) AT=120
+.meas DC v2w_p_vee_120 FIND V(vee_v2w_p) AT=120
+.meas DC v2w_p_vhv_150 FIND V(hv) AT=150
+.meas DC v2w_p_vtap_150 FIND V(tap_v2w_p) AT=150
+.meas DC v2w_p_vin_150 FIND V(inp_v2w_p) AT=150
+.meas DC v2w_p_iin_150 FIND I(Vi_v2w_p) AT=150
+.meas DC v2w_p_vcc_150 FIND V(vcc_v2w_p) AT=150
+.meas DC v2w_p_vee_150 FIND V(vee_v2w_p) AT=150
+.meas DC v2w_u_vhv_50 FIND V(hv) AT=50
+.meas DC v2w_u_vtap_50 FIND V(tap_v2w_u) AT=50
+.meas DC v2w_u_vin_50 FIND V(inp_v2w_u) AT=50
+.meas DC v2w_u_iin_50 FIND I(Vi_v2w_u) AT=50
+.meas DC v2w_u_vcc_50 FIND V(vcc_v2w_u) AT=50
+.meas DC v2w_u_vee_50 FIND V(vee_v2w_u) AT=50
+.meas DC v2w_u_vhv_120 FIND V(hv) AT=120
+.meas DC v2w_u_vtap_120 FIND V(tap_v2w_u) AT=120
+.meas DC v2w_u_vin_120 FIND V(inp_v2w_u) AT=120
+.meas DC v2w_u_iin_120 FIND I(Vi_v2w_u) AT=120
+.meas DC v2w_u_vcc_120 FIND V(vcc_v2w_u) AT=120
+.meas DC v2w_u_vee_120 FIND V(vee_v2w_u) AT=120
+.meas DC v2w_u_vhv_150 FIND V(hv) AT=150
+.meas DC v2w_u_vtap_150 FIND V(tap_v2w_u) AT=150
+.meas DC v2w_u_vin_150 FIND V(inp_v2w_u) AT=150
+.meas DC v2w_u_iin_150 FIND I(Vi_v2w_u) AT=150
+.meas DC v2w_u_vcc_150 FIND V(vcc_v2w_u) AT=150
+.meas DC v2w_u_vee_150 FIND V(vee_v2w_u) AT=150
+.meas DC i3_p_vhv_50 FIND V(hv) AT=50
+.meas DC i3_p_vtap_50 FIND V(tap_i3_p) AT=50
+.meas DC i3_p_vin_50 FIND V(inp_i3_p) AT=50
+.meas DC i3_p_iin_50 FIND I(Vi_i3_p) AT=50
+.meas DC i3_p_vcc_50 FIND V(vcc_i3_p) AT=50
+.meas DC i3_p_vee_50 FIND V(vee_i3_p) AT=50
+.meas DC i3_p_vhv_120 FIND V(hv) AT=120
+.meas DC i3_p_vtap_120 FIND V(tap_i3_p) AT=120
+.meas DC i3_p_vin_120 FIND V(inp_i3_p) AT=120
+.meas DC i3_p_iin_120 FIND I(Vi_i3_p) AT=120
+.meas DC i3_p_vcc_120 FIND V(vcc_i3_p) AT=120
+.meas DC i3_p_vee_120 FIND V(vee_i3_p) AT=120
+.meas DC i3_p_vhv_150 FIND V(hv) AT=150
+.meas DC i3_p_vtap_150 FIND V(tap_i3_p) AT=150
+.meas DC i3_p_vin_150 FIND V(inp_i3_p) AT=150
+.meas DC i3_p_iin_150 FIND I(Vi_i3_p) AT=150
+.meas DC i3_p_vcc_150 FIND V(vcc_i3_p) AT=150
+.meas DC i3_p_vee_150 FIND V(vee_i3_p) AT=150
+.meas DC i3_u_vhv_50 FIND V(hv) AT=50
+.meas DC i3_u_vtap_50 FIND V(tap_i3_u) AT=50
+.meas DC i3_u_vin_50 FIND V(inp_i3_u) AT=50
+.meas DC i3_u_iin_50 FIND I(Vi_i3_u) AT=50
+.meas DC i3_u_vcc_50 FIND V(vcc_i3_u) AT=50
+.meas DC i3_u_vee_50 FIND V(vee_i3_u) AT=50
+.meas DC i3_u_vhv_120 FIND V(hv) AT=120
+.meas DC i3_u_vtap_120 FIND V(tap_i3_u) AT=120
+.meas DC i3_u_vin_120 FIND V(inp_i3_u) AT=120
+.meas DC i3_u_iin_120 FIND I(Vi_i3_u) AT=120
+.meas DC i3_u_vcc_120 FIND V(vcc_i3_u) AT=120
+.meas DC i3_u_vee_120 FIND V(vee_i3_u) AT=120
+.meas DC i3_u_vhv_150 FIND V(hv) AT=150
+.meas DC i3_u_vtap_150 FIND V(tap_i3_u) AT=150
+.meas DC i3_u_vin_150 FIND V(inp_i3_u) AT=150
+.meas DC i3_u_iin_150 FIND I(Vi_i3_u) AT=150
+.meas DC i3_u_vcc_150 FIND V(vcc_i3_u) AT=150
+.meas DC i3_u_vee_150 FIND V(vee_i3_u) AT=150
+.meas DC i5_p_vhv_50 FIND V(hv) AT=50
+.meas DC i5_p_vtap_50 FIND V(tap_i5_p) AT=50
+.meas DC i5_p_vin_50 FIND V(inp_i5_p) AT=50
+.meas DC i5_p_iin_50 FIND I(Vi_i5_p) AT=50
+.meas DC i5_p_vcc_50 FIND V(vcc_i5_p) AT=50
+.meas DC i5_p_vee_50 FIND V(vee_i5_p) AT=50
+.meas DC i5_p_vhv_120 FIND V(hv) AT=120
+.meas DC i5_p_vtap_120 FIND V(tap_i5_p) AT=120
+.meas DC i5_p_vin_120 FIND V(inp_i5_p) AT=120
+.meas DC i5_p_iin_120 FIND I(Vi_i5_p) AT=120
+.meas DC i5_p_vcc_120 FIND V(vcc_i5_p) AT=120
+.meas DC i5_p_vee_120 FIND V(vee_i5_p) AT=120
+.meas DC i5_p_vhv_150 FIND V(hv) AT=150
+.meas DC i5_p_vtap_150 FIND V(tap_i5_p) AT=150
+.meas DC i5_p_vin_150 FIND V(inp_i5_p) AT=150
+.meas DC i5_p_iin_150 FIND I(Vi_i5_p) AT=150
+.meas DC i5_p_vcc_150 FIND V(vcc_i5_p) AT=150
+.meas DC i5_p_vee_150 FIND V(vee_i5_p) AT=150
+.meas DC i5_u_vhv_50 FIND V(hv) AT=50
+.meas DC i5_u_vtap_50 FIND V(tap_i5_u) AT=50
+.meas DC i5_u_vin_50 FIND V(inp_i5_u) AT=50
+.meas DC i5_u_iin_50 FIND I(Vi_i5_u) AT=50
+.meas DC i5_u_vcc_50 FIND V(vcc_i5_u) AT=50
+.meas DC i5_u_vee_50 FIND V(vee_i5_u) AT=50
+.meas DC i5_u_vhv_120 FIND V(hv) AT=120
+.meas DC i5_u_vtap_120 FIND V(tap_i5_u) AT=120
+.meas DC i5_u_vin_120 FIND V(inp_i5_u) AT=120
+.meas DC i5_u_iin_120 FIND I(Vi_i5_u) AT=120
+.meas DC i5_u_vcc_120 FIND V(vcc_i5_u) AT=120
+.meas DC i5_u_vee_120 FIND V(vee_i5_u) AT=120
+.meas DC i5_u_vhv_150 FIND V(hv) AT=150
+.meas DC i5_u_vtap_150 FIND V(tap_i5_u) AT=150
+.meas DC i5_u_vin_150 FIND V(inp_i5_u) AT=150
+.meas DC i5_u_iin_150 FIND I(Vi_i5_u) AT=150
+.meas DC i5_u_vcc_150 FIND V(vcc_i5_u) AT=150
+.meas DC i5_u_vee_150 FIND V(vee_i5_u) AT=150
+.meas DC v1b_p_vhv_50 FIND V(hv_v1b_p) AT=50
+.meas DC v1b_p_vtap_50 FIND V(tap_v1b_p) AT=50
+.meas DC v1b_p_vin_50 FIND V(inp_v1b_p) AT=50
+.meas DC v1b_p_iin_50 FIND I(Vi_v1b_p) AT=50
+.meas DC v1b_p_vcc_50 FIND V(vcc_v1b_p) AT=50
+.meas DC v1b_p_vee_50 FIND V(vee_v1b_p) AT=50
+.meas DC v1b_p_vhv_120 FIND V(hv_v1b_p) AT=120
+.meas DC v1b_p_vtap_120 FIND V(tap_v1b_p) AT=120
+.meas DC v1b_p_vin_120 FIND V(inp_v1b_p) AT=120
+.meas DC v1b_p_iin_120 FIND I(Vi_v1b_p) AT=120
+.meas DC v1b_p_vcc_120 FIND V(vcc_v1b_p) AT=120
+.meas DC v1b_p_vee_120 FIND V(vee_v1b_p) AT=120
+.meas DC v1b_p_vhv_150 FIND V(hv_v1b_p) AT=150
+.meas DC v1b_p_vtap_150 FIND V(tap_v1b_p) AT=150
+.meas DC v1b_p_vin_150 FIND V(inp_v1b_p) AT=150
+.meas DC v1b_p_iin_150 FIND I(Vi_v1b_p) AT=150
+.meas DC v1b_p_vcc_150 FIND V(vcc_v1b_p) AT=150
+.meas DC v1b_p_vee_150 FIND V(vee_v1b_p) AT=150
+.meas DC v1b_u_vhv_50 FIND V(hv_v1b_u) AT=50
+.meas DC v1b_u_vtap_50 FIND V(tap_v1b_u) AT=50
+.meas DC v1b_u_vin_50 FIND V(inp_v1b_u) AT=50
+.meas DC v1b_u_iin_50 FIND I(Vi_v1b_u) AT=50
+.meas DC v1b_u_vcc_50 FIND V(vcc_v1b_u) AT=50
+.meas DC v1b_u_vee_50 FIND V(vee_v1b_u) AT=50
+.meas DC v1b_u_vhv_120 FIND V(hv_v1b_u) AT=120
+.meas DC v1b_u_vtap_120 FIND V(tap_v1b_u) AT=120
+.meas DC v1b_u_vin_120 FIND V(inp_v1b_u) AT=120
+.meas DC v1b_u_iin_120 FIND I(Vi_v1b_u) AT=120
+.meas DC v1b_u_vcc_120 FIND V(vcc_v1b_u) AT=120
+.meas DC v1b_u_vee_120 FIND V(vee_v1b_u) AT=120
+.meas DC v1b_u_vhv_150 FIND V(hv_v1b_u) AT=150
+.meas DC v1b_u_vtap_150 FIND V(tap_v1b_u) AT=150
+.meas DC v1b_u_vin_150 FIND V(inp_v1b_u) AT=150
+.meas DC v1b_u_iin_150 FIND I(Vi_v1b_u) AT=150
+.meas DC v1b_u_vcc_150 FIND V(vcc_v1b_u) AT=150
+.meas DC v1b_u_vee_150 FIND V(vee_v1b_u) AT=150
+.meas DC v2b_p_vhv_50 FIND V(hv_v2b_p) AT=50
+.meas DC v2b_p_vtap_50 FIND V(tap_v2b_p) AT=50
+.meas DC v2b_p_vin_50 FIND V(inp_v2b_p) AT=50
+.meas DC v2b_p_iin_50 FIND I(Vi_v2b_p) AT=50
+.meas DC v2b_p_vcc_50 FIND V(vcc_v2b_p) AT=50
+.meas DC v2b_p_vee_50 FIND V(vee_v2b_p) AT=50
+.meas DC v2b_p_vhv_120 FIND V(hv_v2b_p) AT=120
+.meas DC v2b_p_vtap_120 FIND V(tap_v2b_p) AT=120
+.meas DC v2b_p_vin_120 FIND V(inp_v2b_p) AT=120
+.meas DC v2b_p_iin_120 FIND I(Vi_v2b_p) AT=120
+.meas DC v2b_p_vcc_120 FIND V(vcc_v2b_p) AT=120
+.meas DC v2b_p_vee_120 FIND V(vee_v2b_p) AT=120
+.meas DC v2b_p_vhv_150 FIND V(hv_v2b_p) AT=150
+.meas DC v2b_p_vtap_150 FIND V(tap_v2b_p) AT=150
+.meas DC v2b_p_vin_150 FIND V(inp_v2b_p) AT=150
+.meas DC v2b_p_iin_150 FIND I(Vi_v2b_p) AT=150
+.meas DC v2b_p_vcc_150 FIND V(vcc_v2b_p) AT=150
+.meas DC v2b_p_vee_150 FIND V(vee_v2b_p) AT=150
+.meas DC v2b_u_vhv_50 FIND V(hv_v2b_u) AT=50
+.meas DC v2b_u_vtap_50 FIND V(tap_v2b_u) AT=50
+.meas DC v2b_u_vin_50 FIND V(inp_v2b_u) AT=50
+.meas DC v2b_u_iin_50 FIND I(Vi_v2b_u) AT=50
+.meas DC v2b_u_vcc_50 FIND V(vcc_v2b_u) AT=50
+.meas DC v2b_u_vee_50 FIND V(vee_v2b_u) AT=50
+.meas DC v2b_u_vhv_120 FIND V(hv_v2b_u) AT=120
+.meas DC v2b_u_vtap_120 FIND V(tap_v2b_u) AT=120
+.meas DC v2b_u_vin_120 FIND V(inp_v2b_u) AT=120
+.meas DC v2b_u_iin_120 FIND I(Vi_v2b_u) AT=120
+.meas DC v2b_u_vcc_120 FIND V(vcc_v2b_u) AT=120
+.meas DC v2b_u_vee_120 FIND V(vee_v2b_u) AT=120
+.meas DC v2b_u_vhv_150 FIND V(hv_v2b_u) AT=150
+.meas DC v2b_u_vtap_150 FIND V(tap_v2b_u) AT=150
+.meas DC v2b_u_vin_150 FIND V(inp_v2b_u) AT=150
+.meas DC v2b_u_iin_150 FIND I(Vi_v2b_u) AT=150
+.meas DC v2b_u_vcc_150 FIND V(vcc_v2b_u) AT=150
+.meas DC v2b_u_vee_150 FIND V(vee_v2b_u) AT=150
+.options plotwinsize=0
+.end

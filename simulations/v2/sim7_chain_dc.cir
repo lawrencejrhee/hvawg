@@ -1,0 +1,210 @@
+* HVAWG -- SIM 7a: FULL signal chain with the FINAL V2 values, quasi-static DC via .tran
+* ==========================================================================
+* Batch (one case per process, see sim7_run.py):  LTspice.exe -b sim7_chain_dc.cir
+* Why .tran: a .dc sweep of the LM8261 macro-model stalls in batch (Sims 1/5); a slow
+*   transient with held steps is robust and gives the same quasi-static answers.
+*
+* WHAT IS NEW vs Sims 1/5: every part is at its final schematic value (hvawg.kicad_sch,
+*   2026-09-24) and the parts the earlier sims idealised are real circuits:
+*   - DAC path: 7805 (ideal 5 V) -> R7+R8+R9 / R10 (JP2 bridged) -> U4A NE5532 follower (1.25 V)
+*     -> R11 2.7k -> dac_out; DAC0808 = ideal current sink Iout = code/256 * 5V/(R4+R5)
+*     (JP1 OPEN -> Iref = 0.926 mA -> V_DAC = +1.25 V @ code 0 ... -1.24 V @ code 255).
+*   - Monitor: R12 110k / (R27 820 + RV2 rheostat X2), C14 100n, C15 10u, R30 = 22k (final),
+*     U8A = NE5532 macro-model follower (its input bias flows through R30), TP3 = U8 out.
+*   - Level shifter: U6 LM8261, Q3 IRF9610 (VDMOS approx, Vto = VTQ3), R29 = 1 Meg (final),
+*     D5 BZT52C12 (K->S), R17 2.7k, R19 DNP (absent); R26 3.3k + RV1 rheostat = behavioural R = V(rr).
+*   - Output: U7 LM8261 on the floating rail (C24 10u, C25 100n, R15 1M), Q1 IRF730 approx,
+*     R22 = 75 (final), R28 100k, D4 BZT52C12 (K->G), R18 1M, R21 10k, R31 4.7k, R23/R32/C32 DNP.
+*     Load at TP6 (output_post) = 10Meg scope || CL.
+*   - HV bulk caps C26/C27 4.7u on the rails (each rail = ideal source + 1 ohm).
+* TIMELINE (MODE=1 "trim" run; MODE=0 = R fixed at RFIX for the whole run, same timeline):
+*   0-0.5m   power-up + settle at code 128 (midscale), R = R0 (ideal-op-amp centring value)
+*   0.5-6.5m R ramp R0 -> 4300 (RV1 max) -> 3300 (RV1 min) -> R0          [RV1 range ends]
+*   7-10m    servo: R integrates -KS*V(out) -> V(out) = 0 at midscale      [= bench trim]
+*   10-15.2m R held; DAC code staircase 128,118,138,128,96,64,32,0,160,192,224,255,128
+*            (400 us per code: >> the ~3 us TP5 time constant, so each hold is DC)
+* Probes: iq1/iq3 = drain currents (1 V = 1 A); id4/id5 > 0 = zener breakdown current.
+* START-UP / .op: the DC .op search with 5 op-amp macro-models is a lottery (the same netlist may
+*   converge in 5 s or give up after 140 s), so sim7_run.py tries up to three routes and records which
+*   one worked (all three end in the same DC state before anything is measured):
+*   1. plain .op with the .nodeset hints below;
+*   2. HV homotopy: .op solved at HV0 = 150 V (where it converges reliably), then the rails ramp
+*      to HV during 0.05-0.2 ms;
+*   3. '.tran ... startup' (all sources ramp up from 0 in 20 us; nodesets removed).
+*   In every route Bpre pre-charges the 10 uF tap cap C15 to the divider value of the momentary
+*   rail (incl. the ~0.5 uA U8 bias drop) until 0.29 ms, so its 11 ms time constant is not waited out.
+* ==========================================================================
+.param HV=150
+.param HV0={HV}
+.param X2=290
+.param VTQ3=-3
+.param R29V=1Meg
+.param R30V=22k
+.param R22V=75
+.param IBX=0
+.param MODE=1
+.param RFIX=3600
+.param CL=20p
+.param KS=2.4e5
+.param Cz=45p
+.param rb=820+X2
+.param R0=10000/R22V*2700*rb/(110000+rb)
+
+.include ../LM8261.MOD
+.include ../NE5532.MOD
+.model IRF9610_APPROX VDMOS(pchan Vto={VTQ3} Kp=0.6 Lambda=0.003 Rd=2.2 Rs=0.5 Rb=0.5 Cgdmax=120p Cgdmin=8p Cgs=155p Cjo=60p Is=1e-12 ksubthres=0.1 mfg=approximation Vds=-200 Ron=3 Qg=11n)
+.model IRF730_APPROX VDMOS(Rg=2 Vto=3.5 Kp=2 Lambda=0.003 Rd=0.7 Rs=0.05 Rb=0.2 Cgdmax=0.8n Cgdmin=50p A=1 Cgs=620p Cjo=640p M=0.5 Vj=0.7 Is=20p BV=400 IBV=250u ksubthres=0.1 mfg=approximation Vds=400 Ron=1 Qg=38n)
+.model DZ12 D(Is=1e-14 Rs=5 BV=12 Ibv=5m Cjo={Cz} M=0.4 Vj=0.75)
+.model DESD D(Is=1e-15 Rs=10)
+
+* ---------------- supplies (every ideal source has series R) ----------------
+Vhp  hvp0 0 PWL(0 {HV0} 0.05m {HV0} 0.2m {HV})
+Rhp  hvp0 hvp 1
+Vhn  hvn0 0 PWL(0 {-HV0} 0.05m {-HV0} 0.2m {-HV})
+Rhn  hvn0 hvn 1
+C26  hvp 0 4.7u Rser=0.5
+C27  0 hvn 4.7u Rser=0.5
+Vfl  hvn12a hvn 12
+Rfl  hvn12a hvn12 1
+C24  hvn12 hvn 10u Rser=10m
+C25  hvn12 hvn 100n Rser=50m
+R15  hvn12 hvn 1Meg
+Vp12 vp12a 0 12
+Rp12 vp12a vp12 1
+Vm12 vm12a 0 -12
+Rm12 vm12a vm12 1
+V5   v5a 0 5
+R5v  v5a v5 1
+
+* ---------------- DAC path: U4A buffer + R11 + DAC0808 current sink ----------------
+R7   v5 n78 2.7k
+R8   n78 n89 2.7k
+R9   n89 ref 2.7k
+R10  ref 0 2.7k
+XU4  ref u4o vp12 vm12 u4o NE5532
+R11  u4o dac 2.7k
+* Iref = V(5V)/(R4+R5) = 5/5.4k (JP1 open); the sink pulls current OUT of node dac
+Bdac dac 0 I=V(code)/256*V(v5)/5.4k
+Vcode code 0 PWL(0 128 10.4m 128 10.42m 118 10.8m 118 10.82m 138 11.2m 138 11.22m 128 11.6m 128 11.62m 96 12m 96 12.02m 64 12.4m 64 12.42m 32 12.8m 32 12.82m 0 13.2m 0 13.22m 160 13.6m 160 13.62m 192 14m 192 14.02m 224 14.4m 224 14.42m 255 14.8m 255 14.82m 128 15.2m 128)
+
+* ---------------- HV monitor: R12 / (R27 + RV2), C14, C15, R30, U8A ----------------
+R12  hvp tap 110k
+Rbot tap 0 {rb}
+C14  tap 0 100n
+C15  tap 0 10u Rser=10m
+Bpre tap 0 I=if(time<0.29m, 10*(V(tap)-(V(hvp)*rb/(110000+rb)-(0.5u+IBX)*110000*rb/(110000+rb))), 0)
+R30  tap u8p {R30V}
+* optional extra input-bias current (models an NE5532 above the macro-model's ~0.5 uA)
+Iibx u8p 0 {IBX}
+XU8  u8p tp3 vp12 vm12 tp3 NE5532
+
+* ---------------- level shifter: U6 + Q3 ----------------
+Brv1 tp3 s I=V(tp3,s)/max(V(rr),100)
+XU6  dac s vp12 vm12 gq3 LM8261
+MQ3  dq3 gq3 s IRF9610_APPROX
+Viq3 dq3 tp4 0
+R17  tp4 hvn 2.7k
+Ctp4 tp4 hvn 5p
+R29  s gq3 {R29V}
+D5   gq3 d5k DZ12
+Vd5  d5k s 0
+
+* ---------------- output stage: U7 + Q1 ----------------
+XU7  tp4 src1 hvn12 hvn g1 LM8261
+Desdp tp4 hvn12 DESD
+Desdn hvn tp4 DESD
+MQ1  dq1 g1 src1 IRF730_APPROX
+Viq1 out dq1 0
+R22  src1 hvn {R22V}
+R28  g1 src1 100k
+D4   src1 d4k DZ12
+Vd4  d4k g1 0
+R18  g1 hvn 1Meg
+R21  hvp out 10k
+R31  out opost 4.7k
+Rscope opost 0 10Meg
+CLd  opost 0 {CL}
+
+* ---------------- RV1 setting: ramp / servo / fixed ----------------
+Vprof prof 0 PWL(0 {R0} 0.5m {R0} 2m 4300 5m 3300 6.5m {R0})
+Bint 0 int I=if(time>7m & time<10m, -KS*V(out), 0)
+Cint int 0 1
+Rint int 0 1e12
+Brr  rr 0 V=if(MODE, if(time<7m, V(prof), R0+V(int)), RFIX)
+
+* probes
+Biq1 iq1 0 V=I(Viq1)
+Biq3 iq3 0 V=I(Viq3)
+Bid4 id4 0 V=-I(Vd4)
+Bid5 id5 0 V=-I(Vd5)
+
+.nodeset V(tp3)={HV0*rb/(110000+rb)} V(tap)={HV0*rb/(110000+rb)} V(u8p)={HV0*rb/(110000+rb)} V(s)=0 V(dac)=0 V(u4o)=1.25 V(ref)=1.25 V(tp4)={-HV0+HV0/10000*R22V} V(src1)={-HV0+HV0/10000*R22V} V(g1)={-HV0+HV0/10000*R22V+3.6} V(out)=0
+.nodeset V(gq3)={VTQ3+0.1} V(n78)=3.75 V(n89)=2.5 V(hvn12)={-HV0+12} V(opost)=0 V(dq1)=0 V(dq3)={-HV0+HV0/10000*R22V}
+.tran 0 15.2m 0 5u
+.options plotwinsize=0 numdgt=15 measdgt=7 itl4=100
+
+* ---- operating point at start (code 128, R = R0) ----
+.meas TRAN hand_R0 PARAM R0
+.meas TRAN u4o_0 AVG V(u4o) FROM 0.3m TO 0.5m
+.meas TRAN dac_0 AVG V(dac) FROM 0.3m TO 0.5m
+.meas TRAN tap_0 AVG V(tap) FROM 0.3m TO 0.5m
+.meas TRAN u8p_0 AVG V(u8p) FROM 0.3m TO 0.5m
+.meas TRAN tp3_0 AVG V(tp3) FROM 0.3m TO 0.5m
+.meas TRAN r30drop PARAM tap_0-u8p_0
+.meas TRAN out_R0 AVG V(out) FROM 0.3m TO 0.5m
+* ---- RV1 range ends (valid only in MODE=1) ----
+.meas TRAN out_Rhi FIND V(out) AT 2m
+.meas TRAN out_Rlo FIND V(out) AT 5m
+.meas TRAN iq1_Rlo FIND V(iq1) AT 5m
+.meas TRAN iq1_Rhi FIND V(iq1) AT 2m
+* ---- trimmed (MODE=1) / fixed (MODE=0) centre ----
+.meas TRAN Rc AVG V(rr) FROM 9.8m TO 10m
+.meas TRAN out_c AVG V(out) FROM 9.8m TO 10m
+.meas TRAN tp3_c AVG V(tp3) FROM 9.8m TO 10m
+.meas TRAN tp4r_c AVG V(tp4)-V(hvn) FROM 9.8m TO 10m
+.meas TRAN iq1_c AVG V(iq1) FROM 9.8m TO 10m
+.meas TRAN iq3_c AVG V(iq3) FROM 9.8m TO 10m
+.meas TRAN vgs1_c AVG V(g1)-V(src1) FROM 9.8m TO 10m
+.meas TRAN vgs3_c AVG V(gq3)-V(s) FROM 9.8m TO 10m
+.meas TRAN ir29_c AVG (V(s)-V(gq3))/R29V FROM 9.8m TO 10m
+.meas TRAN pq1_c AVG V(out,src1)*V(iq1) FROM 9.8m TO 10m
+.meas TRAN pr21_c AVG V(hvp,out)*V(iq1) FROM 9.8m TO 10m
+* ---- DAC staircase (average of the last 100 us of each 400 us hold) ----
+.meas TRAN o128 AVG V(out) FROM 10.3m TO 10.4m
+.meas TRAN o118 AVG V(out) FROM 10.7m TO 10.8m
+.meas TRAN o138 AVG V(out) FROM 11.1m TO 11.2m
+.meas TRAN o128b AVG V(out) FROM 11.5m TO 11.6m
+.meas TRAN o96 AVG V(out) FROM 11.9m TO 12m
+.meas TRAN o64 AVG V(out) FROM 12.3m TO 12.4m
+.meas TRAN o32 AVG V(out) FROM 12.7m TO 12.8m
+.meas TRAN o0 AVG V(out) FROM 13.1m TO 13.2m
+.meas TRAN o160 AVG V(out) FROM 13.5m TO 13.6m
+.meas TRAN o192 AVG V(out) FROM 13.9m TO 14m
+.meas TRAN o224 AVG V(out) FROM 14.3m TO 14.4m
+.meas TRAN o255 AVG V(out) FROM 14.7m TO 14.8m
+.meas TRAN o128c AVG V(out) FROM 15.1m TO 15.2m
+.meas TRAN d118 AVG V(dac) FROM 10.7m TO 10.8m
+.meas TRAN d138 AVG V(dac) FROM 11.1m TO 11.2m
+.meas TRAN d0 AVG V(dac) FROM 13.1m TO 13.2m
+.meas TRAN d255 AVG V(dac) FROM 14.7m TO 14.8m
+.meas TRAN gain PARAM (o138-o118)/(d138-d118)
+.meas TRAN vpercode PARAM (o138-o118)/20
+.meas TRAN iq3_0 AVG V(iq3) FROM 13.1m TO 13.2m
+.meas TRAN iq3_255 AVG V(iq3) FROM 14.7m TO 14.8m
+.meas TRAN iq1_0 AVG V(iq1) FROM 13.1m TO 13.2m
+.meas TRAN iq1_255 AVG V(iq1) FROM 14.7m TO 14.8m
+.meas TRAN vgs1_255 AVG V(g1)-V(src1) FROM 14.7m TO 14.8m
+.meas TRAN pr21_255 AVG V(hvp,out)*V(iq1) FROM 14.7m TO 14.8m
+.meas TRAN pq1_255 AVG V(out,src1)*V(iq1) FROM 14.7m TO 14.8m
+* ---- whole-run stress ----
+.meas TRAN id4max MAX V(id4) FROM 0.3m TO 15.2m
+.meas TRAN id4min MIN V(id4) FROM 0.3m TO 15.2m
+.meas TRAN id5max MAX V(id5) FROM 0.3m TO 15.2m
+.meas TRAN id5min MIN V(id5) FROM 0.3m TO 15.2m
+.meas TRAN vgs1max MAX V(g1)-V(src1) FROM 0.3m TO 15.2m
+.meas TRAN vgs3min MIN V(gq3)-V(s) FROM 0.3m TO 15.2m
+.meas TRAN vgs3max MAX V(gq3)-V(s) FROM 0.3m TO 15.2m
+.meas TRAN outmax MAX V(out) FROM 0.3m TO 15.2m
+.meas TRAN outmin MIN V(out) FROM 0.3m TO 15.2m
+.meas TRAN iu8max MAX abs(I(R30)) FROM 0.3m TO 15.2m
+.end

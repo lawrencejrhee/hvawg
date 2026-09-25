@@ -1,0 +1,130 @@
+* HVAWG -- SIM 5: R29 (Q3 gate-source resistor) value sweep -- centering + rail independence
+* ==========================================================================
+* Derived from SIM 1 (v2_dc_levelshift_output.cir): SLICE copied verbatim (V2 parts, case A =
+* R19/R23 ABSENT), same LM8261 macro-model (U6, U7), same VDMOS approximations, same method:
+* sweep the level-shifter resistance R_RV1_total (behavioural resistor, R = V(rr)) starting at
+* the hand centering value R0, V_DAC = 0.  DC only.   Batch:  LTspice.exe -b sim5_r29_sweep.cir
+* Only changes vs SIM 1: R29 value is a parameter; Q3 Vto is a parameter; two slices per step.
+*
+* TWO independent copies of the circuit per step, sharing only the swept resistance V(rr):
+*     XA at +/-50 V (nodes ...a) and XB at +/-120 V (nodes ...b).  In one sweep:
+*     RcA  = R_RV1_total that centres the output at +/-50 V
+*     RcB  = R_RV1_total that centres the output at +/-120 V
+*     offA_trimB = V(out) at +/-50 V with RV1 left where it centred the +/-120 V board
+*     offB_trimA = V(out) at +/-120 V with RV1 left where it centred the +/-50 V board
+* SWEEP SHAPE (sw = 0..1): R = R0 -> 1.04*R0 (sw 0..0.1), then 1.04*R0 -> 0.68*R0 (sw 0.1..1).
+*   R0 (no-R29 hand value) is rail independent and a known-good start point (SIM 1); the short
+*   up-leg catches R29-open cases whose centre sits just above R0, the down-leg catches the
+*   R29 cases (R29 steals Q3 current, so the centre moves below R0).  WHEN finds the first
+*   crossing; the circuit is linear over this range, so both legs give the same crossing.
+*
+* NODESET: no gate (gq3) nodeset -- with Vto=-2 a gate nodeset at Vto-0.1 made the .op search
+*   fail; letting the solver place the gate converges for Vto = -2, -3, -4.
+* .step dimensions: r29v (R29; 1e12 = open), vtq3 (Q3 Vto, IRF9610 spread -2..-4 V),
+*   x2 (RV2 setting; R_bottom = R27 820 + x2 -> 1110 / 1320 ohm).
+* V2 RV1 range: R_RV1_total = R26 3.3k + x1 (0..1k) = 3300..4300 ohm.
+* ==========================================================================
+
+.include ../LM8261.MOD
+
+.model IRF9610_APPROX VDMOS(pchan Vto={vtq3} Kp=0.6 Lambda=0.003 Rd=2.2 Rs=0.5 Rb=0.5 Cgdmax=120p Cgdmin=8p Cgs=155p Cjo=60p Is=1e-12 ksubthres=0.1 mfg=approximation Vds=-200 Ron=3 Qg=11n)
+.model IRF730_APPROX VDMOS(Rg=2 Vto=3.5 Kp=2 Lambda=0.003 Rd=0.7 Rs=0.05 Rb=0.2 Cgdmax=0.8n Cgdmin=50p A=1 Cgs=620p Cjo=640p M=0.5 Vj=0.7 Is=20p BV=400 IBV=250u ksubthres=0.1 mfg=approximation Vds=400 Ron=1 Qg=38n)
+.model DZ12 D(Is=1e-14 Rs=5 BV=12 Ibv=5m Cjo={Cz} M=0.4 Vj=0.75)
+.model DESD D(Is=1e-15 Rs=10)
+.param Cz=45p
+
+.step param r29v list 100k 470k 1Meg 2.2Meg 1e12
+.step param vtq3 list -2 -3 -4
+.step param x2 list 290 500
+.param rb = 820+x2
+* hand model (ideal op amps, no R28/R29 currents), case A: Rload = R17 2700, Rsrc = R22 75
+.param Rsrc = 75
+.param Kh = 10000/Rsrc*2700
+.param R0 = Kh*rb/(110000+rb)
+.param Rup = 1.04*R0
+.param Rlo = 0.68*R0
+
+.subckt SLICE rr out tp3 tp4 s gq3 src1 g1 iq1 iq3 id4 id5 params: vd=0 hvp=50 rbp=1110 fitp=0 v2p=1 r29p=100k
+Vhp  hvp0 0 {hvp}
+Rhp  hvp0 hvp 1
+Vhn  hvn0 0 {-hvp}
+Rhn  hvn0 hvn 1
+Vfl  hvn12 hvn 12
+Vp12 vp12 0 12
+Vm12 vm12 0 -12
+Vdac dacv 0 {vd}
+R11  dacv dac 2.7k
+R12  hvp tap 110k
+Rbot tap 0 {rbp}
+E8   tp3i 0 tap 0 1
+Ro8  tp3i tp3 1
+Brv1 tp3 s I=V(tp3,s)/V(rr)
+XU6  dac s vp12 vm12 gq3 LM8261
+MQ3  dq3 gq3 s IRF9610_APPROX
+Viq3 dq3 tp4 0
+R17  tp4 hvn 2.7k
+R19  tp4 hvn {if(fitp,100,1G)}
+R29  s gq3 {r29p}
+D5   gq3 n5 DZ12
+Rz5  n5 d5m {if(v2p,1,1G)}
+Vsd5 d5m s 0
+XU7  tp4 src1 hvn12 hvn g1 LM8261
+Desdp tp4 hvn12 DESD
+Desdn hvn tp4 DESD
+R18  g1 hvn 1Meg
+R28  g1 src1 {if(v2p,100k,1G)}
+D4   src1 n4 DZ12
+Rz4  n4 d4m {if(v2p,1,1G)}
+Vsd4 d4m g1 0
+MQ1  dq1 g1 src1 IRF730_APPROX
+Viq1 out dq1 0
+R22  src1 hvn 75
+R23  src1 hvn {if(fitp,100,1G)}
+R21  hvp out 10k
+R31  out opost {if(v2p,4.7k,1)}
+Rscope opost 0 10Meg
+* probes: 1 V = 1 A.  id4/id5 > 0 = zener reverse (breakdown) current, < 0 = forward.
+Biq1 iq1 0 V=I(Viq1)
+Biq3 iq3 0 V=I(Viq3)
+Bid4 id4 0 V=-I(Vsd4)
+Bid5 id5 0 V=-I(Vsd5)
+.ends SLICE
+
+Vsw sw 0 0
+Brr rr 0 V=if(V(sw)<0.1, R0+(Rup-R0)*V(sw)/0.1, Rup-(Rup-Rlo)*(V(sw)-0.1)/0.9)
+XA rr outa tp3a tp4a sa gq3a src1a g1a iq1a iq3a id4a id5a SLICE params: vd=0 hvp=50  rbp={rb} fitp=0 v2p=1 r29p={r29v}
+XB rr outb tp3b tp4b sb gq3b src1b g1b iq1b iq3b id4b id5b SLICE params: vd=0 hvp=120 rbp={rb} fitp=0 v2p=1 r29p={r29v}
+.nodeset V(tp3a)={50*rb/(110000+rb)} V(sa)=0 V(tp4a)={-50+50/10000*Rsrc} V(src1a)={-50+50/10000*Rsrc} V(g1a)={-50+50/10000*Rsrc+3.6} V(outa)=0
+.nodeset V(tp3b)={120*rb/(110000+rb)} V(sb)=0 V(tp4b)={-120+120/10000*Rsrc} V(src1b)={-120+120/10000*Rsrc} V(g1b)={-120+120/10000*Rsrc+3.6} V(outb)=0
+
+.dc Vsw 0 1 0.001
+.options plotwinsize=0 numdgt=15 measdgt=7 itl2=300
+
+.meas DC hand_R0 PARAM R0
+.meas DC s0_outA FIND V(outa) AT=0
+.meas DC s0_outB FIND V(outb) AT=0
+.meas DC end_R FIND V(rr) AT=1
+.meas DC end_outA FIND V(outa) AT=1
+.meas DC end_outB FIND V(outb) AT=1
+* centering at +/-50 V (A) and +/-120 V (B)
+.meas DC cA WHEN V(outa)=0
+.meas DC cB WHEN V(outb)=0
+.meas DC RcA FIND V(rr) AT=cA
+.meas DC RcB FIND V(rr) AT=cB
+* rail independence: trim on one rail, run on the other (same RV1 setting)
+.meas DC offA_trimB FIND V(outa) AT=cB
+.meas DC offB_trimA FIND V(outb) AT=cA
+* operating point at each centre: Q3 Vgs, Q3 drain current, R29 current, TP3, zener D5 current
+.meas DC vgsA FIND V(gq3a)-V(sa) AT=cA
+.meas DC vgsB FIND V(gq3b)-V(sb) AT=cB
+.meas DC iq3A FIND V(iq3a) AT=cA
+.meas DC iq3B FIND V(iq3b) AT=cB
+.meas DC ir29A FIND (V(sa)-V(gq3a))/r29v AT=cA
+.meas DC ir29B FIND (V(sb)-V(gq3b))/r29v AT=cB
+.meas DC tp3A FIND V(tp3a) AT=cA
+.meas DC tp3B FIND V(tp3b) AT=cB
+.meas DC id5A FIND V(id5a) AT=cA
+* hand estimate with the R29 current included (uses the simulated Vsg)
+.meas DC hRcA PARAM tp3A/(50*75/2.7e7 - vgsA/r29v)
+.meas DC hRcB PARAM tp3B/(120*75/2.7e7 - vgsB/r29v)
+.end

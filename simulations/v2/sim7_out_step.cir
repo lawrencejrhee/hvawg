@@ -1,0 +1,83 @@
+* HVAWG -- SIM 7c: class-A output stage alone, FINAL V2 values: zero-input + step stability
+* Copy of sim2_classA_stab_irf730.cir (VAR=3) with R22 = 75 (Sim 2 used 50), R18 1M,
+*   C24/C25/R15 on the floating rail; CL at TP6 swept wider (10p..100p = "tens of pF").
+* Input = DC bias VDC (TP4 rel. -HV) -> drain current VDC/75; +VSTEP at 20 us, back at 35 us.
+*   At 150 V: VDC = 0.15 -> out ~+130 V, 1.125 -> ~0 V, 2.1 -> ~-130 V.  VSTEP = 50 mV -> ~6.7 V.
+* Zero-input window 12-20 us: any self-started oscillation shows up as pk-pk there.
+* Default (trapezoidal) integration on purpose (Gear damping could hide ringing); the runner
+*   also re-runs selected cases with method=gear as a cross-check.
+.param CGDMIN=50p R31V=4.7k RF=1 CF=1e-18
+* RF/CF: optional in-loop compensation (NOT on the board): RF from Q1 source to U7 -IN, CF from U7 out
+*   to U7 -IN. Defaults (1 ohm, 1 aF) = the board as drawn.
+* CGDMIN: IRF730 approx Crss floor (50p = Sims 1-5 value; sensitivity only). R31V=1 = V1-like (load straight on TP5)
+.param HV=150 CL=20p Cz=45p Rg=1 R22V=75 VDC=1.125 VSTEP=0.05
+XU1 IN FBI VCC NHV OA LM8261
+Rf SRC FBI {RF}
+Cf OA FBI {CF}
+M1 TP5 G SRC SRC IRF730_APPROX
+Rg1 OA G {Rg}
+R22 SRC NHV {R22V}
+R21 PHV TP5 10k
+R28 G SRC 100k
+D4 SRC G DZ12
+R18 G NHV 1Meg
+R31 TP5 TP6 {R31V}
+C1 TP6 0 {CL}
+RSCOPE TP6 0 10Meg
+V3 PHV0 0 {HV}
+R3p PHV0 PHV 1
+V_neg NHV0 0 {-HV}
+R3n NHV0 NHV 1
+* board HV bulk caps (C26/C27 4.7u electrolytic) -- also keeps the 1-ohm rail nodes from being stiff
+C26 PHV 0 4.7u Rser=0.5
+C27 0 NHV 4.7u Rser=0.5
+V2 IN0 NHV PWL(0 {VDC} 20u {VDC} 20.02u {VDC+VSTEP} 35u {VDC+VSTEP} 35.02u {VDC})
+* TP4 source impedance + node capacitance (as Sim 3: 5 pF)
+Rin IN0 IN 100
+Ctp4 IN NHV 5p
+V1 N12 NHV 12
+R1 N12 VCC 1
+C24 VCC NHV 10u Rser=10m
+C25 VCC NHV 100n Rser=50m
+R15 VCC NHV 1Meg
+.nodeset V(SRC)={-HV+VDC} V(G)={-HV+VDC+3.56} V(OA)={-HV+VDC+3.56} V(TP5)={HV-10000*VDC/R22V} V(TP6)={HV-10000*VDC/R22V} V(VCC)={-HV+12} V(IN)={-HV+VDC}
+* run extended to 100 us (Sim 2 stopped at 50 us) to tell a decaying tail from a sustained
+* oscillation after the step: compare the Q1-source ripple in 40-50, 60-80 and 80-100 us.
+.tran 0 100u 0 5n
+.options plotwinsize=0 gminsteps=500 cshunt=1e-12 itl4=500
+.meas tran pps_pre pp V(SRC) from 12u to 20u
+.meas tran pps_post pp V(SRC) from 25u to 35u
+.meas tran pps_40 pp V(SRC) from 40u to 50u
+.meas tran pps_60 pp V(SRC) from 60u to 80u
+.meas tran pps_80 pp V(SRC) from 80u to 100u
+.meas tran pp5_60 pp V(TP5) from 60u to 80u
+.meas tran pp5_80 pp V(TP5) from 80u to 100u
+.meas tran pp6_80 pp V(TP6) from 80u to 100u
+.meas tran ppg_80 pp V(G) from 80u to 100u
+.meas tran zc1 when V(SRC)=-HV+VDC*1.0 td=90u cross=1
+.meas tran zc11 when V(SRC)=-HV+VDC*1.0 td=90u cross=11
+.meas tran fring param 5/(zc11-zc1)
+.meas tran pp_pre pp V(TP5) from 12u to 20u
+.meas tran pp_post pp V(TP5) from 28u to 35u
+.meas tran pp_end pp V(TP5) from 43u to 50u
+.meas tran ppg_pre pp V(G) from 12u to 20u
+.meas tran ppg_end pp V(G) from 43u to 50u
+.meas tran pp6_pre pp V(TP6) from 12u to 20u
+.meas tran pp6_end pp V(TP6) from 43u to 50u
+.meas tran v_pre avg V(TP5) from 15u to 20u
+.meas tran v_post avg V(TP5) from 30u to 35u
+.meas tran v_end avg V(TP5) from 45u to 50u
+.meas tran vmin_step min V(TP5) from 20u to 28u
+.meas tran over_pct param 100*(v_post-vmin_step)/(v_pre-v_post)
+.meas tran vmax_ret max V(TP5) from 35u to 43u
+.meas tran over2_pct param 100*(vmax_ret-v_end)/(v_end-v_post)
+.meas tran t_set1 when V(TP5)=v_post+0.02*(v_pre-v_post) td=20u fall=1
+.meas tran t_set2 when V(TP5)=v_end-0.02*(v_end-v_post) td=35u rise=1
+.meas tran v6_post avg V(TP6) from 30u to 35u
+.meas tran v6_pre avg V(TP6) from 15u to 20u
+.meas tran v6min_step min V(TP6) from 20u to 28u
+.meas tran over6_pct param 100*(v6_post-v6min_step)/(v6_pre-v6_post)
+.model DZ12 D(Is=1e-14 Rs=5 BV=12 Ibv=5m Cjo={Cz} M=0.4 Vj=0.75)
+.model IRF730_APPROX VDMOS(Rg=2 Vto=3.5 Kp=2 Lambda=0.003 Rd=0.7 Rs=0.05 Rb=0.2 Cgdmax=0.8n Cgdmin={CGDMIN} A=1 Cgs=620p Cjo=640p M=0.5 Vj=0.7 Is=20p BV=400 IBV=250u ksubthres=0.1 mfg=approximation Vds=400 Ron=1 Qg=38n)
+.include ../LM8261.MOD
+.end

@@ -1,0 +1,29 @@
+* SIM 2 baseline reproduction: class-A output stage, STW11NM80, Rg1=100
+* Hand transcription of ../class-a-amplifier-test-cload-sweep.asc (same parts, rails, source,
+* .tran and .options). Only the Cload sweep is shortened to the two end points.
+* Reference results from that file's log: Cload=2p -> +143.97/-141.27 V, Cload=20p -> +139.60/-136.95 V
+*
+* Node map: TP5 = drain / amplifier output, SRC = source (U1 -IN), G = gate, OA = opamp output,
+*           NHV = -150 V rail, PHV = +150 V rail, VCC = -HV + 12 V (floating opamp supply)
+*
+XU1 IN SRC VCC NHV OA LM8261
+M1 TP5 G SRC SRC STW11NM80
+Rg1 OA G 100
+R3 SRC NHV 50
+R2 PHV TP5 10k
+V3 PHV 0 150
+V_neg NHV 0 -150
+V2 IN NHV SINE(0.75 0.75 100k)
+V1 N12 NHV 12
+R1 N12 VCC 1
+C1 TP5 0 {Cload}
+.param Cload=10p
+.step param Cload list 2p 20p
+.tran 0 50u 30u 5n
+.options method=gear plotwinsize=0 gminsteps=500 cshunt=1e-12 itl4=500
+.meas tran vout_pp pp V(TP5)
+.meas tran vout_max max V(TP5)
+.meas tran vout_min min V(TP5)
+.lib C:\Users\lawre\AppData\Local\LTspice\lib\cmp\standard.mos
+.include ../LM8261.MOD
+.end

@@ -1,0 +1,61 @@
+* HVAWG -- SIM 3: level shifter alone -- which V2 part (R29 or D5) causes the V2 differences?
+* Run:  LTspice.exe -b sim3_levelshift_isolate.cir   Results: .meas + .four in sim3_levelshift_isolate.log
+* 100 kHz sine, SAME amplitude as sim3_levelshift_tran100k_v2swing.cir (0.36 V @50 V, 0.99 V @120 V),
+* plus the DC operating point (t = 0 values, sine starts at 0).  Same models as sim3_levelshift_common.inc.
+*   run 1: 50 V  V1 (reference)           run 6: 120 V V1
+*   run 2: 50 V  R29 100k only (no D5)    run 7: 120 V R29 100k only
+*   run 3: 50 V  D5 only, Cz 45p          run 8: 120 V D5 only, Cz 45p
+*   run 4: 50 V  D5 only, Cz 100p         run 9: 120 V D5 only, Cz 100p
+*   run 5: 50 V  R29 = 1 Meg + D5 45p     run 10: 120 V R29 = 1 Meg + D5 45p   (possible fix)
+
+.include sim3_levelshift_common.inc
+.step param run 1 10 1
+.param hv  = table(run, 1,50, 5,50, 6,120, 10,120)
+.param r29 = table(run, 1,1e9, 2,1e5, 3,1e9, 4,1e9, 5,1e6, 6,1e9, 7,1e5, 8,1e9, 9,1e9, 10,1e6)
+.param d5  = table(run, 1,0, 2,0, 3,1, 4,1, 5,1, 6,0, 7,0, 8,1, 9,1, 10,1)
+.param Cz  = table(run, 1,45e-12, 3,45e-12, 4,100e-12, 5,45e-12, 8,45e-12, 9,100e-12, 10,45e-12)
+.param amp = table(run, 1,0.36, 5,0.36, 6,0.99, 10,0.99)
+
+* Same circuit as LS3 but with R29 value and D5 presence as separate parameters
+.subckt LS3X dacin tp4 tp4r s fb g iq3 id5 ir29 vgs params: hvp=50 r29v=1e9 d5p=1
+Vhn  hvn0 0 {-hvp}
+Rhn  hvn0 hvn 1
+Vp12 vp12 0 12
+Vm12 vm12 0 -12
+Vtp3 tp3i 0 {hvp*1110/111110}
+Rtp3 tp3i tp3 1
+Rrv1 tp3 s 3.6k
+R11  dacin dac 2.7k
+XU6  dac fb vp12 vm12 g LM8261
+MQ3  dq3 g s IRF9610_APPROX
+Viq3 dq3 tp4 0
+R17  tp4 hvn 2.7k
+Ctp4 tp4 hvn 5p
+R29  s n29 {r29v}
+V29  n29 g 0
+D5   g n5 DZ12
+Rz5  n5 d5m {if(d5p,1,1G)}
+Vd5  d5m s 0
+Biq3  iq3  0 V=I(Viq3)
+Bid5  id5  0 V=-I(Vd5)
+Bir29 ir29 0 V=I(V29)
+Btp4r tp4r 0 V=V(tp4)-V(hvn)
+Bvgs  vgs  0 V=V(g)-V(s)
+.ends LS3X
+
+Vdac dac 0 SINE(0 {amp} 100k)
+X1 dac tp4 tp4r s fb g iq3 id5 ir29 vgs LS3X params: hvp={hv} r29v={r29} d5p={d5}
+Vsh fb s 0
+
+.options plotwinsize=0
+.tran 0 100u 0 5n
+.four 100k 9 2 V(tp4)
+
+.meas TRAN iq3_0  FIND V(iq3)  AT 0
+.meas TRAN tp4r_0 FIND V(tp4r) AT 0
+.meas TRAN ir29_0 FIND V(ir29) AT 0
+.meas TRAN pp     PP  V(tp4r) FROM 80u TO 100u
+.meas TRAN gain   PARAM pp/(2*amp)
+.meas TRAN tmin   MIN V(tp4r) FROM 80u TO 100u
+.meas TRAN iqmin  MIN V(iq3)  FROM 80u TO 100u
+.end

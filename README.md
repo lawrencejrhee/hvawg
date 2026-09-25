@@ -96,7 +96,7 @@ The level shifter can be disconnected from the DAC via jumper JP3 in order to in
 
 Potentiometer RV1 controls the gain of the high voltage output and should be adjusted to give a 100x amplification.
 
-NOTE: PCBs FABBED FROM PRE-2026-09-09 DESIGN FILES HAVE AN ERROR (see "Errata" below) where the source and drain of PMOS transistor Q3 are switched. If this is not fixed during assembly, when the high voltage low rail is turned on, significant current will flow through R17, which will burn out due to excessive power draw. The design files were corrected on 2026-09-09 (schematic pin mapping + copper reroute, DRC/ERC/netlist verified); boards fabbed from the corrected files take Q3 with straight legs. The exported gerbers under jlcpcb/ were regenerated from the corrected design on 2026-09-09.
+NOTE: PCBs FABBED FROM PRE-2026-09-09 DESIGN FILES HAVE AN ERROR (see "Errata" below) where the source and drain of PMOS transistor Q3 are switched. If this is not fixed during assembly, when the high voltage low rail is turned on, significant current will flow through R17, which will burn out due to excessive power draw. The design files were corrected on 2026-09-09 (schematic pin mapping + copper reroute, DRC/ERC/netlist verified); boards fabbed from the corrected files take Q3 with straight legs. The exported gerbers under jlcpcb/ are generated from the V2 design revision, which includes this fix.
 
 ### High side monitor circuit
 
@@ -142,7 +142,11 @@ Header pins are ordered in lenths of 18 to reduce costs. These should be manuall
 
 The power resistor R21 needs spare wires soldered on to fit the PCB footprint. The resistor hangs off the edge of the board so it can be bolted to a heatsink. It's possible these spare wires increase EMI emissions. Future board iterations could switch to a TO-220 package power resistor, matching NMOS transistor Q1, which is also at the edge of the board for easy heatsink mounting.
 
+V2 boards (the current design files) mount R21 on the board instead. It is a TO-220 power resistor (LTO050F10001JTE3) laid flat in a small bolt-on heatsink (Wakefield 272-AB), which is screwed to the board and tied to GND. Q1 still goes on a heatsink bar along the board edge. Its tab is at the output voltage, so it needs an insulating pad (Sil-Pad K-10) and a shoulder washer (Keystone 3049). V2 boards also change the connector pinouts, the trimpots (1kohm, wired as rheostats; RV1 now centers the output and RV2 sets the gain) and the power input (J9, a pluggable 8-pin terminal block). On V2 boards the 5kohm R21 option (see Output amplifier) would double R21's dissipation, beyond what the on-board heatsink is sized for. See BRINGUP-V2.md for assembly and bringup, and V2-SUMMARY.md for the full list of changes.
+
 ### Bringup notes
+
+The notes below are for V1 boards. V2 boards use BRINGUP-V2.md.
 
 After the board is assembled, the following bringup/test strategy seems to work well:
 
@@ -178,6 +182,10 @@ After the board is assembled, the following bringup/test strategy seems to work 
 | CC0603KRX7R9BB104 |  12 | 0.01 | basic    | 100nF 0603 50V            | https://jlcpcb.com/partdetail/Yageo-CC0603KRX7R9BB104/C14663           |
 | CL31A106KBHNNNE   |  13 | 0.03 | basic    | 10uF 1206 50V             | https://jlcpcb.com/partdetail/14236-CL31A106KBHNNNE/C13585             |
 | 2010W2J0114T4S    |   1 | 0.01 | extended | 110kohm 2010 200V 500mW   | https://jlcpcb.com/partdetail/21062-2010W2J0114T4S/C20351              |
+| CRGP2512F22K      |   1 | 0.41 | unknown  | 22kohm 2512 500V 2W (V2)  | https://www.lcsc.com/datasheet/C2076055.pdf                            |
+| CL31B106KAHNNNE   |   1 | 0.19 | extended | 10uF 1206 25V X7R (V2)    | https://jlcpcb.com/partdetail/C14860                                   |
+
+The last two rows are V2 parts: CRGP2512F22K is R30 and CL31B106KAHNNNE is C24. V2 boards also use D4, D5, R26-R29 and R31 (see the schematic). They take 12 of CL31A106KBHNNNE instead of 13, because C24 sits next to the R21 heatsink and must be the X7R part (rated to 125°C, while CL31A106KBHNNNE is X5R and rated to 85°C).
 
 ### Through-hole components (manually added afterward)
 
@@ -190,12 +198,19 @@ After the board is assembled, the following bringup/test strategy seems to work 
 | THS2510KJ      |   1 | $2.5  | 10kohm power resistor | https://www.digikey.com/en/products/detail/te-connectivity-passive-product/THS2510KJ/2366983  |
 | PREC018SABN-RC |   3 | $0.25 | 18-pin male header    | https://www.digikey.com/en/products/detail/sullins-connector-solutions/PREC018SABN-RC/2775036 |
 | PPPC181LGBN-RC |   3 | $0.82 | 18-pin female header  | https://www.digikey.com/en/products/detail/sullins-connector-solutions/PPPC181LGBN-RC/775951  |
+| 3296Y-1-102LF  |   2 | -     | 1kohm trimpot (V2)    | https://www.bourns.com/docs/Product-Datasheets/3296.pdf                                       |
+| LTO050F10001JTE3 | 1 | $5.1  | 10kohm TO-220 (V2)    | https://www.vishay.com/docs/50050/lto50.pdf                                                   |
+| 272-AB         |   1 | $0.79 | TO-220 heatsink (V2)  | https://www.digikey.com/en/products/detail/wakefield-vette/272-AB/345-1043-ND/340341          |
+| 1844278        |   1 | $3.26 | J9 header (V2)        | https://www.phoenixcontact.com/en-us/products/pcb-header-mc-15-8-g-35-1844278                 |
+| 1840421        |   1 | $9.32 | J9 plug (V2)          | https://www.phoenixcontact.com/en-us/products/pcb-plug-mc-15-8-st-35-1840421                  |
+
+V2 boards use the 1kohm trimpots and LTO050F10001JTE3 instead of the 4.7kohm trimpots and THS2510KJ. They also need two M3 screws with washers and nuts plus non-silicone thermal compound (e.g., Wakefield 126) to mount R21 and its heatsink, and a Sil-Pad K-10 and Keystone 3049 shoulder washer for Q1 (details in BRINGUP-V2.md).
 
 ## Errata and Future Improvements
 
 Board error (FIXED in design files 2026-09-09; still applies to boards fabbed before then):
 - The PMOS transistor (Q3) source and drain pins are switched on the PCB. On boards fabbed from pre-fix files, this can be fixed when hand-soldering by bending the MOSFET legs to fit the right holes. Not doing this causes excessive current through R17, burning it out, with possible additional damage to RV1.
-- Design-file fix (2026-09-09): the Q_PMOS_GDS symbol pin mapping for Q3 was corrected in hvawg.kicad_sch (S=pin 3 to the RV1/U6 network, D=pin 2 to levelshift_out, matching the physical IRF9610 G-D-S pinout), the corresponding pad nets were swapped and copper rerouted in hvawg.kicad_pcb (net "Net-(Q3-D)" renamed "Net-(Q3-S)", zones refilled). Verified: netlist shows Q3 pin 2 on levelshift_out / pin 3 on Net-(Q3-S); DRC and ERC reports are identical to pre-fix baseline (no new violations, 0 unconnected). Boards fabbed from these files install Q3 with straight legs. The exported gerbers and production zip under jlcpcb/ were regenerated from the corrected design on 2026-09-09 (drill files verified hole-identical; copper carries the corrected nets).
+- Design-file fix (2026-09-09): the Q_PMOS_GDS symbol pin mapping for Q3 was corrected in hvawg.kicad_sch (S=pin 3 to the RV1/U6 network, D=pin 2 to levelshift_out, matching the physical IRF9610 G-D-S pinout), the corresponding pad nets were swapped and copper rerouted in hvawg.kicad_pcb (net "Net-(Q3-D)" renamed "Net-(Q3-S)", zones refilled). Verified: netlist shows Q3 pin 2 on levelshift_out / pin 3 on Net-(Q3-S); DRC and ERC reports are identical to pre-fix baseline (no new violations, 0 unconnected). Boards fabbed from these files install Q3 with straight legs. The exported gerbers and production zip under jlcpcb/ were regenerated for this fix on 2026-09-09 (drill files verified hole-identical; copper carries the corrected nets), and again from the V2 design revision from 2026-09-23 on (each time checked against the board: DRC clean, every drill-hole change accounted for). Regenerate them after any further board change. The BOM/CPL files have not been updated for the V2 parts; regenerate them with the kicad-jlcpcb-tools plugin.
 - A safe first-power check for ANY board of unknown revision: set the negative-HV supply current limit to 2 mA and ramp toward -20 V. Reaching full voltage at under ~1 mA means Q3 is correct; pinning at the 2 mA limit with the rail collapsed means the swap is active (the 2 mA ceiling keeps R17 well within its power rating either way).
 
 EMI issue:

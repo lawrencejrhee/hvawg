@@ -1,0 +1,55 @@
+* HVAWG -- SIM 3: level shifter alone -- FULL-SCALE DAC sine (+/-1.4 V, 100 kHz): Q3 cutoff / clipping
+* Run:  LTspice.exe -b sim3_levelshift_fullscale.cir   Results: .meas tables in sim3_levelshift_fullscale.log
+* run 1: +/-50 V V1   run 2: +/-50 V V2 (Cz 45p)   run 3: +/-120 V V1   run 4: +/-120 V V2 (Cz 45p)
+* Hand model: Q3 conducts only while V_DAC < V_TP3 (0.4995 V at 50 V, 1.1988 V at 120 V).
+*   Unclipped ideal TP4 would be 0.75*(V_TP3 - V_DAC): 50 V -> -0.675..+1.425 V; clipped at 0 (= -HV).
+*   Ideal fraction of each period with Q3 off at 50 V: (180 - 2*asin(0.4995/1.4))/360 = 38.4 %.
+* Measured window = one period, 50..60 us (DAC positive half = 50..55 us).
+
+.include sim3_levelshift_common.inc
+.step param run 1 4 1
+.param hv  = table(run, 1,50, 2,50, 3,120, 4,120)
+.param v2  = table(run, 1,0, 2,1, 3,0, 4,1)
+.param Cz  = 45e-12
+
+Vdac dac 0 SINE(0 1.4 100k)
+X1 dac tp4 tp4r s fb g iq3 id5 irv ir29 vgs LS3 params: hvp={hv} v2p={v2}
+Vsh fb s 0
+
+.options plotwinsize=0
+.tran 0 60u 0 5n
+
+.meas TRAN pp     PP  V(tp4r) FROM 50u TO 60u
+.meas TRAN tmax   MAX V(tp4r) FROM 50u TO 60u
+.meas TRAN tmin   MIN V(tp4r) FROM 50u TO 60u
+.meas TRAN toff   WHEN V(iq3)=2u TD=50u FALL=1
+.meas TRAN ton    WHEN V(iq3)=2u TD=50u RISE=1
+.meas TRAN offpct PARAM 100*(ton-toff)/10u
+.meas TRAN vgsmax MAX V(vgs)  FROM 50u TO 60u
+.meas TRAN vgsmin MIN V(vgs)  FROM 50u TO 60u
+.meas TRAN vsmax  MAX V(s)    FROM 50u TO 60u
+.meas TRAN id5fwd MIN V(id5)  FROM 50u TO 60u
+.meas TRAN id5brk MAX V(id5)  FROM 50u TO 60u
+* recovery: TP4 vs ideal 0.75*(V_TP3 - V_DAC) 0.5 us after the ideal turn-on point
+.meas TRAN tp4_at_55u FIND V(tp4r) AT 55u
+.meas TRAN tp4_at_56u FIND V(tp4r) AT 56u
+.meas TRAN tp4_at_575u FIND V(tp4r) AT 57.5u
+
+* TP4-based clip timing (added after first run: the iq3 = 2 uA timing above includes Cgd/Cds
+* displacement current, so TP4 itself is the better clip indicator).  Ideal clip window at 50 V:
+* 50.58..54.42 us (V1), 50.46..54.54 us (V2, whose cutoff is ~0.40 V); at 120 V: 51.64..53.36 us.
+.meas TRAN tclip   WHEN V(tp4r)=0.01 TD=50u FALL=1
+.meas TRAN tunclip WHEN V(tp4r)=0.01 TD=50u RISE=1
+.meas TRAN clippct PARAM 100*(tunclip-tclip)/10u
+.meas TRAN vg_at_53u FIND V(g) AT 53u
+.meas TRAN vs_at_53u FIND V(s) AT 53u
+.meas TRAN vg_at_55u FIND V(g) AT 55u
+.meas TRAN vs_at_55u FIND V(s) AT 55u
+.meas TRAN vgmax MAX V(g) FROM 50u TO 60u
+
+* Clip window with a 0.1 V threshold (above the tens-of-mV Cgd/Cds feedthrough bumps).
+* Ideal (hand model) TP4 < 0.1 V window at 50 V: V1 50.42..54.58 us (41.6 %); V2 (R29 offset) 50.30..54.70 us (44.0 %).
+.meas TRAN tclip100   WHEN V(tp4r)=0.1 TD=50u FALL=1
+.meas TRAN tunclip100 WHEN V(tp4r)=0.1 TD=50u RISE=1
+.meas TRAN clip100pct PARAM 100*(tunclip100-tclip100)/10u
+.end

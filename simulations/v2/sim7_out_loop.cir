@@ -1,0 +1,79 @@
+* HVAWG -- SIM 7d: class-A output stage, FINAL V2 values: U7 loop gain / phase margin (.ac)
+* Same stage as sim7_out_step.cir (R22 = 75, R18, R28, D4, R31 4.7k, CL at TP6).
+* AC voltage injection between the Q1 source (SRC) and U7 -IN (FB): U7 -IN is a high-Z op-amp
+*   input and SRC is low-Z (75 ohm || 1/gm), so this is a clean breaking point.
+*   T = -V(SRC)/V(FB); at |T| = 1 the phase of V(SRC)/V(FB) IS the phase margin
+*   (same method as sim3_levelshift.cir for U6).
+* Bias: VDC (TP4 rel. -HV) sets the drain current VDC/75 (150 V: 0.15 / 1.125 / 2.1 V ->
+*   out ~ +130 / 0 / -130 V).  Closed loop copy (XCL-style, second instance) gives the stage
+*   bandwidth V(TP6)/V(IN).
+.param CGDMIN=50p R31V=4.7k RF=1 CF=1e-18
+* RF/CF: optional in-loop compensation (NOT on the board): RF from Q1 source to U7 -IN, CF from U7 out
+*   to U7 -IN. Defaults (1 ohm, 1 aF) = the board as drawn. Injection stays at the low-Z Q1 source.
+* CGDMIN: IRF730 approx Crss floor (50p = Sims 1-5 value; sensitivity only). R31V=1 = V1-like (load straight on TP5)
+.param HV=150 CL=20p Cz=45p Rg=1 R22V=75 VDC=1.125
+* ---- loop-gain copy ----
+XU1 IN FBI VCC NHV OA LM8261
+Rf FB FBI {RF}
+Cf OA FBI {CF}
+Vinj FB SRC 0 AC 1
+M1 TP5 G SRC SRC IRF730_APPROX
+Rg1 OA G {Rg}
+R22 SRC NHV {R22V}
+R21 PHV TP5 10k
+R28 G SRC 100k
+D4 SRC G DZ12
+R18 G NHV 1Meg
+R31 TP5 TP6 {R31V}
+C1 TP6 0 {CL}
+RSCOPE TP6 0 10Meg
+V2 IN0 NHV {VDC}
+Rin IN0 IN 1
+* ---- closed-loop copy ----
+XU2 INc FBIc VCC NHV OAc LM8261
+Rfc SRCc FBIc {RF}
+Cfc OAc FBIc {CF}
+M2 TP5c Gc SRCc SRCc IRF730_APPROX
+Rg2 OAc Gc {Rg}
+R22c SRCc NHV {R22V}
+R21c PHV TP5c 10k
+R28c Gc SRCc 100k
+D4c SRCc Gc DZ12
+R18c Gc NHV 1Meg
+R31c TP5c TP6c {R31V}
+C1c TP6c 0 {CL}
+RSCOPEc TP6c 0 10Meg
+V2c INc0 NHV {VDC} AC 1
+Rinc INc0 INc 1
+* ---- shared rails ----
+V3 PHV0 0 {HV}
+R3p PHV0 PHV 1
+V_neg NHV0 0 {-HV}
+R3n NHV0 NHV 1
+* board HV bulk caps (C26/C27 4.7u electrolytic) -- also keeps the 1-ohm rail nodes from being stiff
+C26 PHV 0 4.7u Rser=0.5
+C27 0 NHV 4.7u Rser=0.5
+V1 N12 NHV 12
+R1 N12 VCC 1
+C24 VCC NHV 10u Rser=10m
+C25 VCC NHV 100n Rser=50m
+R15 VCC NHV 1Meg
+.nodeset V(SRC)={-HV+VDC} V(FB)={-HV+VDC} V(G)={-HV+VDC+3.56} V(OA)={-HV+VDC+3.56} V(TP5)={HV-10000*VDC/R22V} V(TP6)={HV-10000*VDC/R22V} V(SRCc)={-HV+VDC} V(Gc)={-HV+VDC+3.56} V(OAc)={-HV+VDC+3.56} V(TP5c)={HV-10000*VDC/R22V} V(TP6c)={HV-10000*VDC/R22V} V(VCC)={-HV+12}
+.ac dec 50 1k 300Meg
+.options plotwinsize=0 gminsteps=500 cshunt=1e-12
+.meas AC tlf FIND mag(V(SRC)/V(FB)) AT 1k
+.meas AC fc WHEN mag(V(SRC)/V(FB))=1 FALL=1
+.meas AC fclast WHEN mag(V(SRC)/V(FB))=1 CROSS=LAST
+.meas AC pmx FIND V(SRC)/V(FB) WHEN mag(V(SRC)/V(FB))=1 FALL=1
+.meas AC pmlast FIND V(SRC)/V(FB) WHEN mag(V(SRC)/V(FB))=1 CROSS=LAST
+.meas AC t100k FIND V(SRC)/V(FB) AT 100k
+.meas AC glf FIND mag(V(TP6c)/V(INc)) AT 1k
+.meas AC gpk MAX mag(V(TP6c)/V(INc))
+.meas AC f3db WHEN mag(V(TP6c)/V(INc))=glf/sqrt(2) FALL=1
+.meas AC g5lf FIND mag(V(TP5c)/V(INc)) AT 1k
+.meas AC g5pk MAX mag(V(TP5c)/V(INc))
+.meas AC f3db5 WHEN mag(V(TP5c)/V(INc))=g5lf/sqrt(2) FALL=1
+.model DZ12 D(Is=1e-14 Rs=5 BV=12 Ibv=5m Cjo={Cz} M=0.4 Vj=0.75)
+.model IRF730_APPROX VDMOS(Rg=2 Vto=3.5 Kp=2 Lambda=0.003 Rd=0.7 Rs=0.05 Rb=0.2 Cgdmax=0.8n Cgdmin={CGDMIN} A=1 Cgs=620p Cjo=640p M=0.5 Vj=0.7 Is=20p BV=400 IBV=250u ksubthres=0.1 mfg=approximation Vds=400 Ron=1 Qg=38n)
+.include ../LM8261.MOD
+.end

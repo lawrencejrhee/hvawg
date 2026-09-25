@@ -1,0 +1,30 @@
+* HVAWG -- SIM 7f: level shifter alone, FINAL V2 values (R29 = 1 Meg): small-step stability
+* Copy of sim3_levelshift_step.cir around a DC DAC bias VB: VB -> VB+20 mV at 2 us ->
+*   VB-20 mV at 22 us -> end 42 us.  Default (trapezoidal) integration on purpose.
+.param HV=150 VB=0 R29V=1Meg VTQ3=-3 Cz=45p RRV=3.6k
+.include sim7_ls_common.inc
+
+Vdac dac 0 PWL(0 {VB} 2u {VB} 2.01u {VB+20m} 22u {VB+20m} 22.01u {VB-20m} 42u {VB-20m})
+X1 dac tp4 tp4r s fb g iq3 id5 irv ir29 vgs LS7 params: hvp={HV} r29v={R29V} rrv={RRV}
+Vsh fb s 0
+
+.options plotwinsize=0
+.tran 0 42u 0 2n
+.meas TRAN v0   AVG V(tp4r) FROM 1u TO 2u
+.meas TRAN v1   AVG V(tp4r) FROM 17u TO 22u
+.meas TRAN v2f  AVG V(tp4r) FROM 37u TO 42u
+.meas TRAN stepA PARAM v1-v0
+.meas TRAN stepB PARAM v2f-v1
+.meas TRAN minA MIN V(tp4r) FROM 2u TO 22u
+.meas TRAN maxB MAX V(tp4r) FROM 22u TO 42u
+.meas TRAN ovsA_pct PARAM 100*(v1-minA)/(v0-v1)
+.meas TRAN ovsB_pct PARAM 100*(maxB-v2f)/(v2f-v1)
+.meas TRAN devA_1u  MAX abs(V(tp4r)-v1) FROM 3.01u TO 22u
+.meas TRAN devB_1u  MAX abs(V(tp4r)-v2f) FROM 23.01u TO 42u
+.meas TRAN resA_pp PP V(tp4r) FROM 12u TO 22u
+.meas TRAN resB_pp PP V(tp4r) FROM 32u TO 42u
+.meas TRAN pre_pp  PP V(tp4r) FROM 0.5u TO 2u
+.meas TRAN iq3_0 AVG V(iq3) FROM 1u TO 2u
+.meas TRAN ir29_0 AVG V(ir29) FROM 1u TO 2u
+.meas TRAN vgs_0 AVG V(vgs) FROM 1u TO 2u
+.end

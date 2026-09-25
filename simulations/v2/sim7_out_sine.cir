@@ -1,0 +1,66 @@
+* HVAWG -- SIM 7b: class-A output stage alone, FINAL V2 values, 100 kHz full-swing sine
+* Copy of sim2_classA_v2_irf730.cir (VAR=3 = full V2) with the values the board actually has:
+*   R22 = 75 (Sim 2 kept the old 50 ohm), R18 = 1M gate->-HV added, U7 floating rail
+*   decoupling C24 10u / C25 100n / R15 1M added. Everything else unchanged:
+*   U7 LM8261 vendor model, Q1 IRF730 VDMOS approximation, R28 100k, D4 BZT52C12 (K->G),
+*   R21 10k, R31 4.7k to TP6, load at TP6 = 10Meg || CL.  R23/R32/C32 are DNP (absent).
+* Input = TP4 relative to -HV: centre = HV*R22/R21 (1.125 V at 150 V), amplitude = centre
+*   -> drain current 0..2*HV/R21 -> ideal TP5 swing = +/-HV (same drive depth as Sim 2).
+* Batch: LTspice.exe -b sim7_out_sine.cir  (params overridden per case by sim7_run.py)
+*
+* Node map: TP5 = drain / amp output, TP6 = output_post, SRC = Q1 source (U7 -IN), G = gate,
+*           OA = U7 out, NHV/PHV = -/+HV, VCC = -HV + 12 V floating rail
+.param CGDMIN=50p R31V=4.7k
+* CGDMIN: IRF730 approx Crss floor (50p = Sims 1-5 value; sensitivity only). R31V=1 = V1-like (load straight on TP5)
+.param HV=150 CL=20p Cz=45p Rg=1 R22V=75
+.param VC={HV*R22V/10000}
+XU1 IN SRC VCC NHV OA LM8261
+M1 TP5 G SRC SRC IRF730_APPROX
+Rg1 OA G {Rg}
+R22 SRC NHV {R22V}
+R21 PHV TP5 10k
+R28 G SRC 100k
+D4 SRC G DZ12
+R18 G NHV 1Meg
+R31 TP5 TP6 {R31V}
+C1 TP6 0 {CL}
+RSCOPE TP6 0 10Meg
+V3 PHV0 0 {HV}
+R3p PHV0 PHV 1
+V_neg NHV0 0 {-HV}
+R3n NHV0 NHV 1
+* board HV bulk caps (C26/C27 4.7u electrolytic) -- also keeps the 1-ohm rail nodes from being stiff
+C26 PHV 0 4.7u Rser=0.5
+C27 0 NHV 4.7u Rser=0.5
+V2 IN0 NHV SINE({VC} {VC} 100k)
+* TP4 source impedance + node capacitance (as Sim 3: 5 pF)
+Rin IN0 IN 100
+Ctp4 IN NHV 5p
+V1 N12 NHV 12
+R1 N12 VCC 1
+C24 VCC NHV 10u Rser=10m
+C25 VCC NHV 100n Rser=50m
+R15 VCC NHV 1Meg
+.nodeset V(SRC)={-HV+VC} V(G)={-HV+VC+3.56} V(OA)={-HV+VC+3.56} V(TP5)=0 V(TP6)=0 V(VCC)={-HV+12} V(IN)={-HV+VC}
+.tran 0 50u 30u 5n
+.options method=gear plotwinsize=0 gminsteps=500 cshunt=1e-12 itl4=500
+.four 100k 9 2 V(TP6)
+.meas tran tp5_max max V(TP5)
+.meas tran tp5_min min V(TP5)
+.meas tran tp5_pp pp V(TP5)
+.meas tran tp6_max max V(TP6)
+.meas tran tp6_min min V(TP6)
+.meas tran tp6_pp pp V(TP6)
+.meas tran swing_pct param 100*tp6_pp/(2*HV)
+.meas tran vgs_max max V(G,SRC)
+.meas tran vgs_min min V(G,SRC)
+.meas tran voa_max max V(OA,NHV)
+.meas tran iz_max max I(D4)
+.meas tran iz_min min I(D4)
+.meas tran iq1_max max I(R22)
+.meas tran iq1_min min I(R22)
+.meas tran pq1_avg avg V(TP5,SRC)*I(R22)
+.model DZ12 D(Is=1e-14 Rs=5 BV=12 Ibv=5m Cjo={Cz} M=0.4 Vj=0.75)
+.model IRF730_APPROX VDMOS(Rg=2 Vto=3.5 Kp=2 Lambda=0.003 Rd=0.7 Rs=0.05 Rb=0.2 Cgdmax=0.8n Cgdmin={CGDMIN} A=1 Cgs=620p Cjo=640p M=0.5 Vj=0.7 Is=20p BV=400 IBV=250u ksubthres=0.1 mfg=approximation Vds=400 Ron=1 Qg=38n)
+.include ../LM8261.MOD
+.end

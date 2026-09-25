@@ -1,0 +1,170 @@
+* HVAWG -- SIM 1: DC operating point of level shifter (U6/Q3) + output stage (U7/Q1)
+* ==========================================================================
+* DC only (.dc + .step), no transient.   Batch:  LTspice.exe -b v2_dc_levelshift_output.cir
+* (or open in the LTspice GUI and Run).  Results = .meas tables in the .log.
+* GAIN: V(out) depends on V_DAC only through I_RV1 = (TP3 - V_DAC)/R_RV1_total (U6 holds node S
+*   at V_DAC), so dVout/dVdac = (dVout/dR) * R / TP3 at V_DAC = 0, and V_DAC = v behaves like
+*   R' = R*TP3/(TP3 - v).  The gains in the report were derived from these R sweeps that way.
+*   A direct .dc sweep of V_DAC with the LM8261 macro-model did not converge in batch here.
+*
+* SWEPT QUANTITY: R_RV1_total = total resistance from TP3 (U8 out) to node S (Q3 source),
+*   implemented as behavioural resistor Brv1 with R = V(rr) (volts == ohms).
+*     V2 board:     R_RV1_total = R26 (3.3k) + x1   (x1 = RV1 rheostat 0..1k -> 3300..4300)
+*     pre-V2 board: R_RV1_total = x1                (x1 = 4.7k pot)
+*   Every sweep STARTS at the hand-predicted centering value R0 (a well-behaved linear
+*   operating point) and moves away from it:  dir=0 -> up to 8000 ohm, dir=1 -> down to Rlo.
+*   Starting from a railed/saturated point made the LM8261 macro-model find false DC
+*   solutions or stall, which is why the sweep is split this way.
+*   The .meas tables are indexed by step = (run, dir); a "failed" entry just means that
+*   resistance lies in the other direction's half of the sweep.
+*
+* .step param run:
+*   1-3  : case C  PRE-V2 bench board, +/-50 V: no R26/R27/R28/R29/R31/D4/D5, R19/R23 absent,
+*          RV2 bottom leg 663.98 / 1111.11 / 2244.90 ohm  ->  TP3 = 0.3 / 0.5 / 1.0 V
+*   4-7  : case A  V2, R19/R23 ABSENT, +/-50 V,  x2 = 0, 290, 500, 1000 (R_bottom = R27 820 + x2)
+*   8-11 : case A  V2, R19/R23 ABSENT, +/-120 V, x2 = 0, 290, 500, 1000
+*   12-13: case B  V2, R19/R23 FITTED, +/-50 V,  x2 = 0, 1000
+*   14-15: case B  V2, R19/R23 FITTED, +/-120 V, x2 = 0, 1000
+*   16   : diagnostic = run 5 with R29 removed (isolates R29's effect on centering)
+*
+* MODELS / ASSUMPTIONS
+*   U6, U7 : LM8261 vendor macro-model ../LM8261.MOD (+IN -IN VCC VEE OUT), included, unmodified.
+*            U6 on +/-12 V; U7 on the floating rail -HV .. -HV+12 V.
+*   U8     : ideal unity buffer (E source + 1 ohm).  R30 (10k into U8 +IN) is irrelevant for it.
+*   Q3     : IRF9610 is NOT in the LTspice library -> VDMOS APPROXIMATION from datasheet
+*            (-200 V, Vth -2..-4 V -> Vto=-3, Rds(on) ~3 ohm, Ciss ~170p, Crss ~15p).
+*   Q1     : IRF730 is NOT in the LTspice library -> VDMOS APPROXIMATION from datasheet
+*            (400 V, Vth 2..4 V -> Vto=3.5, Rds(on) ~1 ohm, Ciss ~700p, Crss ~64p).
+*   D4, D5 : BZT52C12 as DZ12 (Is=1e-14 Rs=5 BV=12 Ibv=5m) -- datasheet-typical assumption;
+*            Cz (45p nominal / 100p worst) only matters for AC, not here.
+*   DAC    : V_DAC = 0 through R11 = 2.7k (DAC0808 sinking from the U4 1.25 V buffer).
+*   Load   : 10Meg scope after R31 (V2) / directly on TP5 (pre-V2).
+*   Probes : iq1/iq3 = drain currents (1 V = 1 A); id4/id5 = zener currents, >0 = reverse
+*            (breakdown) current, <0 = forward.
+* ==========================================================================
+
+.include ../LM8261.MOD
+
+.model IRF9610_APPROX VDMOS(pchan Vto=-3.0 Kp=0.6 Lambda=0.003 Rd=2.2 Rs=0.5 Rb=0.5 Cgdmax=120p Cgdmin=8p Cgs=155p Cjo=60p Is=1e-12 ksubthres=0.1 mfg=approximation Vds=-200 Ron=3 Qg=11n)
+.model IRF730_APPROX VDMOS(Rg=2 Vto=3.5 Kp=2 Lambda=0.003 Rd=0.7 Rs=0.05 Rb=0.2 Cgdmax=0.8n Cgdmin=50p A=1 Cgs=620p Cjo=640p M=0.5 Vj=0.7 Is=20p BV=400 IBV=250u ksubthres=0.1 mfg=approximation Vds=400 Ron=1 Qg=38n)
+.model DZ12 D(Is=1e-14 Rs=5 BV=12 Ibv=5m Cjo={Cz} M=0.4 Vj=0.75)
+.model DESD D(Is=1e-15 Rs=10)
+.param Cz=45p
+
+.step param run list 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16
+.step param dir list 0 1
+.param hv    = table(run, 1,50, 7,50, 8,120, 11,120, 12,50, 13,50, 14,120, 15,120, 16,50)
+.param fit   = table(run, 1,0, 11,0, 12,1, 15,1, 16,0)
+.param v2    = table(run, 1,0, 3,0, 4,1, 16,1)
+.param r29on = table(run, 1,1, 15,1, 16,0)
+.param x2    = table(run, 4,0, 5,290, 6,500, 7,1000, 8,0, 9,290, 10,500, 11,1000, 12,0, 13,1000, 14,0, 15,1000, 16,290)
+.param rbpre = table(run, 1,663.98, 2,1111.11, 3,2244.90)
+.param rb    = if(v2, 820+x2, rbpre)
+* hand model (ideal op amps, no R28/R29 currents)
+.param Rload = if(fit, 2700*100/2800, 2700)
+.param Rsrc  = if(fit, 75*100/175, 75)
+.param Kh    = 10000/Rsrc*Rload
+.param R0    = Kh*rb/(110000+rb)
+.param Rhi=8000
+* lower end of the downward sweep: kept inside the linear region for the V2 cases (driving the
+* stage deep into saturation there made the LM8261 macro-model stall); pre-V2 goes to 900 ohm
+* so the old RV1 = 1.0k preset is covered.
+.param Rlo = table(run, 1,900, 3,900, 4,3000, 5,2500, 6,3000, 8,3000, 9,2500, 10,3000, 15,3000, 16,2500)
+
+.subckt SLICE rr out tp3 tp4 s gq3 src1 g1 iq1 iq3 id4 id5 params: vd=0 hvp=50 rbp=1110 fitp=0 v2p=1 r29p=1
+Vhp  hvp0 0 {hvp}
+Rhp  hvp0 hvp 1
+Vhn  hvn0 0 {-hvp}
+Rhn  hvn0 hvn 1
+Vfl  hvn12 hvn 12
+Vp12 vp12 0 12
+Vm12 vm12 0 -12
+Vdac dacv 0 {vd}
+R11  dacv dac 2.7k
+R12  hvp tap 110k
+Rbot tap 0 {rbp}
+E8   tp3i 0 tap 0 1
+Ro8  tp3i tp3 1
+Brv1 tp3 s I=V(tp3,s)/V(rr)
+XU6  dac s vp12 vm12 gq3 LM8261
+MQ3  dq3 gq3 s IRF9610_APPROX
+Viq3 dq3 tp4 0
+R17  tp4 hvn 2.7k
+R19  tp4 hvn {if(fitp,100,1G)}
+R29  s gq3 {if(v2p*r29p,100k,1G)}
+D5   gq3 n5 DZ12
+Rz5  n5 d5m {if(v2p,1,1G)}
+Vsd5 d5m s 0
+XU7  tp4 src1 hvn12 hvn g1 LM8261
+Desdp tp4 hvn12 DESD
+Desdn hvn tp4 DESD
+R18  g1 hvn 1Meg
+R28  g1 src1 {if(v2p,100k,1G)}
+D4   src1 n4 DZ12
+Rz4  n4 d4m {if(v2p,1,1G)}
+Vsd4 d4m g1 0
+MQ1  dq1 g1 src1 IRF730_APPROX
+Viq1 out dq1 0
+R22  src1 hvn 75
+R23  src1 hvn {if(fitp,100,1G)}
+R21  hvp out 10k
+R31  out opost {if(v2p,4.7k,1)}
+Rscope opost 0 10Meg
+* probes: 1 V = 1 A.  id4/id5 > 0 = zener reverse (breakdown) current, < 0 = forward.
+Biq1 iq1 0 V=I(Viq1)
+Biq3 iq3 0 V=I(Viq3)
+Bid4 id4 0 V=-I(Vsd4)
+Bid5 id5 0 V=-I(Vsd5)
+.ends SLICE
+
+Vsw sw 0 0
+Brr rr 0 V=if(dir, R0-(R0-Rlo)*V(sw), R0+(Rhi-R0)*V(sw))
+X1 rr out tp3 tp4 s gq3 src1 g1 iq1 iq3 id4 id5 SLICE params: vd=0 hvp={hv} rbp={rb} fitp={fit} v2p={v2} r29p={r29on}
+.nodeset V(tp3)={hv*rb/(110000+rb)} V(s)=0 V(gq3)=-3.1 V(tp4)={-hv+hv/10000*Rsrc} V(src1)={-hv+hv/10000*Rsrc} V(g1)={-hv+hv/10000*Rsrc+3.6} V(out)=0
+
+.dc Vsw 0 1 0.001
+.options plotwinsize=0 numdgt=15 measdgt=7 itl2=300
+
+* --- hand-model values and the starting (R = R0) operating point ---
+.meas DC hand_R0 PARAM R0
+.meas DC hand_tp3 PARAM hv*rb/(110000+rb)
+.meas DC s0_out FIND V(out) AT=0
+.meas DC s0_tp3 FIND V(tp3) AT=0
+.meas DC s0_tp4rel FIND V(tp4)+hv AT=0
+.meas DC s0_iq3 FIND V(iq3) AT=0
+.meas DC s0_iq1 FIND V(iq1) AT=0
+.meas DC s0_vgsQ1 FIND V(g1)-V(src1) AT=0
+.meas DC s0_vgsQ3 FIND V(gq3)-V(s) AT=0
+.meas DC s0_id4 FIND V(id4) AT=0
+.meas DC s0_id5 FIND V(id5) AT=0
+* --- centering resistance (V(out) = 0) found in either slice ---
+.meas DC cU WHEN V(out)=0
+.meas DC RcU FIND V(rr) AT=cU
+* operating point AT the centering resistance (V(out)=0)
+.meas DC c_tp3 FIND V(tp3) AT=cU
+.meas DC c_tp4rel FIND V(tp4)+hv AT=cU
+.meas DC c_iq3 FIND V(iq3) AT=cU
+.meas DC c_iq1 FIND V(iq1) AT=cU
+.meas DC c_vgsQ1 FIND V(g1)-V(src1) AT=cU
+.meas DC c_vgsQ3 FIND V(gq3)-V(s) AT=cU
+.meas DC c_id4 FIND V(id4) AT=cU
+.meas DC c_id5 FIND V(id5) AT=cU
+* --- ends of the sweeps ---
+.meas DC out_end FIND V(out) AT=1
+.meas DC R_end FIND V(rr) AT=1
+.meas DC iq1_end FIND V(iq1) AT=1
+.meas DC i1000 FIND V(iq1) WHEN V(rr)=1000
+.meas DC vgs1_1000 FIND V(g1)-V(src1) WHEN V(rr)=1000
+.meas DC id4_end FIND V(id4) AT=1
+.meas DC id5_end FIND V(id5) AT=1
+* --- V(out) grid at V2 x1 = 0/250/500/750/1000 (R = 3300..4300) and pre-V2 R = 1k/2k/3k/4.7k ---
+.meas DC oU3300 FIND V(out) WHEN V(rr)=3300
+.meas DC oU3550 FIND V(out) WHEN V(rr)=3550
+.meas DC oU3800 FIND V(out) WHEN V(rr)=3800
+.meas DC oU4050 FIND V(out) WHEN V(rr)=4050
+.meas DC oU4300 FIND V(out) WHEN V(rr)=4300
+.meas DC oU1000 FIND V(out) WHEN V(rr)=1000
+.meas DC oU2000 FIND V(out) WHEN V(rr)=2000
+.meas DC oU3000 FIND V(out) WHEN V(rr)=3000
+.meas DC oU4700 FIND V(out) WHEN V(rr)=4700
+.end

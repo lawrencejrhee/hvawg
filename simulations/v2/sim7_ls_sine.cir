@@ -1,0 +1,31 @@
+* HVAWG -- SIM 7g: level shifter alone, FINAL V2 values (R29 = 1 Meg): 100 kHz DAC sine
+* Copy of sim3_levelshift_tran100k.cir / _fullscale.cir with amplitude AMP (per case):
+*   150 V: AMP = 1.24 V = the real full DAC range (V_TP3 = 1.4985 V, so Q3 never cuts off)
+*    50 V: AMP = 0.45 V (usable swing) and 1.24 V (full scale -> Q3 cut-off / clip recovery)
+* TP4 ideal = 0.75*(V_TP3 - V_DAC), clipped at 0 (= -HV).
+.param HV=150 AMP=1.24 R29V=1Meg VTQ3=-3 Cz=45p RRV=3.6k
+.include sim7_ls_common.inc
+
+Vdac dac 0 SINE(0 {AMP} 100k)
+X1 dac tp4 tp4r s fb g iq3 id5 irv ir29 vgs LS7 params: hvp={HV} r29v={R29V} rrv={RRV}
+Vsh fb s 0
+
+.options plotwinsize=0
+.tran 0 100u 0 5n
+.four 100k 9 2 V(tp4)
+.meas TRAN pp     PP  V(tp4r) FROM 80u TO 100u
+.meas TRAN tmax   MAX V(tp4r) FROM 80u TO 100u
+.meas TRAN tmin   MIN V(tp4r) FROM 80u TO 100u
+.meas TRAN gain   PARAM pp/(2*AMP)
+.meas TRAN iqmin  MIN V(iq3)  FROM 80u TO 100u
+.meas TRAN iqmax  MAX V(iq3)  FROM 80u TO 100u
+.meas TRAN vgsmin MIN V(vgs)  FROM 80u TO 100u
+.meas TRAN vgsmax MAX V(vgs)  FROM 80u TO 100u
+.meas TRAN id5max MAX V(id5)  FROM 80u TO 100u
+.meas TRAN id5min MIN V(id5)  FROM 80u TO 100u
+.meas TRAN ir29pk MAX abs(V(ir29)) FROM 80u TO 100u
+* clip window (0.1 V threshold) in the period 90..100 us (DAC positive half = 90..95 us)
+.meas TRAN tclip100   WHEN V(tp4r)=0.1 TD=90u FALL=1
+.meas TRAN tunclip100 WHEN V(tp4r)=0.1 TD=90u RISE=1
+.meas TRAN clip100pct PARAM 100*(tunclip100-tclip100)/10u
+.end

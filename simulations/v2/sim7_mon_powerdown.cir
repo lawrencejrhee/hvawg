@@ -1,0 +1,110 @@
+* sim7_mon_powerdown.cir -- SIM 7j: copy of sim4_monitor_powerdown.cir with R30 = {R30V} (FINAL V2 value
+* 22k 0805; Sim 4 used 10k). Only the R30 value lines and the added measurements were changed.
+.param R30V=22k
+* sim4_monitor_powerdown.cir -- +HV=150 V held on while +/-12 V ramps to 0 (shutdown-order fault).
+* Tap caps C14=100n + C15=10u (from schematic) must follow the collapsing rail through U8's clamp
+* diode unless R30 limits it. Rail fall time TF stepped. U8 input = clamp diodes to rails + 100k to output.
+.param TF=10m
+.model DCL D(Is=2.52n Rs=0.568 N=1.752)
+VHV hv 0 150
+VP vps 0 PWL(0 12 1m 12 {1m+TF} 0)
+VN vns 0 PWL(0 -12 1m -12 {1m+TF} 0)
+* --- v1n: V1 normal RV2=1.11k
+R12_v1n hv tap_v1n 110k
+C14_v1n tap_v1n 0 100n
+C15_v1n tap_v1n 0 10u Rser=10m
+Rbot_v1n tap_v1n 0 1.11k
+Vi_v1n tap_v1n inp_v1n 0
+RP_v1n vps vcc_v1n 1
+RN_v1n vns vee_v1n 1
+D1_v1n inp_v1n vcc_v1n DCL
+D2_v1n vee_v1n inp_v1n DCL
+Rio_v1n inp_v1n 0 100k
+* --- v1w: V1 wiper open
+R12_v1w hv tap_v1w 110k
+C14_v1w tap_v1w 0 100n
+C15_v1w tap_v1w 0 10u Rser=10m
+Vi_v1w tap_v1w inp_v1w 0
+RP_v1w vps vcc_v1w 1
+RN_v1w vns vee_v1w 1
+D1_v1w inp_v1w vcc_v1w DCL
+D2_v1w vee_v1w inp_v1w DCL
+Rio_v1w inp_v1w 0 100k
+* --- v1m: V1 RV2 max 4.7k
+R12_v1m hv tap_v1m 110k
+C14_v1m tap_v1m 0 100n
+C15_v1m tap_v1m 0 10u Rser=10m
+Rbot_v1m tap_v1m 0 4.7k
+Vi_v1m tap_v1m inp_v1m 0
+RP_v1m vps vcc_v1m 1
+RN_v1m vns vee_v1m 1
+D1_v1m inp_v1m vcc_v1m DCL
+D2_v1m vee_v1m inp_v1m DCL
+Rio_v1m inp_v1m 0 100k
+* --- v2n: V2 normal 290+820
+R12_v2n hv tap_v2n 110k
+C14_v2n tap_v2n 0 100n
+C15_v2n tap_v2n 0 10u Rser=10m
+Rbot_v2n tap_v2n 0 1110
+R30_v2n tap_v2n pin_v2n {R30V}
+Vi_v2n pin_v2n inp_v2n 0
+RP_v2n vps vcc_v2n 1
+RN_v2n vns vee_v2n 1
+D1_v2n inp_v2n vcc_v2n DCL
+D2_v2n vee_v2n inp_v2n DCL
+Rio_v2n inp_v2n 0 100k
+* --- v2w: V2 wiper open 1k+820
+R12_v2w hv tap_v2w 110k
+C14_v2w tap_v2w 0 100n
+C15_v2w tap_v2w 0 10u Rser=10m
+Rbot_v2w tap_v2w 0 1820
+R30_v2w tap_v2w pin_v2w {R30V}
+Vi_v2w pin_v2w inp_v2w 0
+RP_v2w vps vcc_v2w 1
+RN_v2w vns vee_v2w 1
+D1_v2w inp_v2w vcc_v2w DCL
+D2_v2w vee_v2w inp_v2w DCL
+Rio_v2w inp_v2w 0 100k
+* --- i5: V2 bottom leg fully open (R30 only)
+R12_i5 hv tap_i5 110k
+C14_i5 tap_i5 0 100n
+C15_i5 tap_i5 0 10u Rser=10m
+R30_i5 tap_i5 pin_i5 {R30V}
+Vi_i5 pin_i5 inp_i5 0
+RP_i5 vps vcc_i5 1
+RN_i5 vns vee_i5 1
+D1_i5 inp_i5 vcc_i5 DCL
+D2_i5 vee_i5 inp_i5 DCL
+Rio_i5 inp_i5 0 100k
+.tran 0 {TF+30m} 0 {TF/500}
+.step param TF list 1m 10m 100m
+.meas TRAN v1n_imax MAX I(Vi_v1n)
+.meas TRAN v1n_vinmax MAX V(inp_v1n)
+.meas TRAN v1n_vtap0 FIND V(tap_v1n) AT=0.5m
+.meas TRAN v1w_imax MAX I(Vi_v1w)
+.meas TRAN v1w_vinmax MAX V(inp_v1w)
+.meas TRAN v1w_vtap0 FIND V(tap_v1w) AT=0.5m
+.meas TRAN v1m_imax MAX I(Vi_v1m)
+.meas TRAN v1m_vinmax MAX V(inp_v1m)
+.meas TRAN v1m_vtap0 FIND V(tap_v1m) AT=0.5m
+.meas TRAN v2n_imax MAX I(Vi_v2n)
+.meas TRAN v2n_vinmax MAX V(inp_v2n)
+.meas TRAN v2n_vtap0 FIND V(tap_v2n) AT=0.5m
+.meas TRAN v2w_imax MAX I(Vi_v2w)
+.meas TRAN v2w_vinmax MAX V(inp_v2w)
+.meas TRAN v2w_vtap0 FIND V(tap_v2w) AT=0.5m
+.meas TRAN i5_imax MAX I(Vi_i5)
+.meas TRAN i5_vinmax MAX V(inp_i5)
+.meas TRAN i5_vtap0 FIND V(tap_i5) AT=0.5m
+.options plotwinsize=0
+* --- added in Sim 7: peak R30 power and min U8 input current (reverse clamp) ---
+.meas TRAN v2n_pr30max MAX I(Vi_v2n)*I(Vi_v2n)*R30V
+.meas TRAN v2n_imin MIN I(Vi_v2n)
+.meas TRAN v2w_pr30max MAX I(Vi_v2w)*I(Vi_v2w)*R30V
+.meas TRAN v2w_imin MIN I(Vi_v2w)
+.meas TRAN i5_pr30max MAX I(Vi_i5)*I(Vi_i5)*R30V
+.meas TRAN i5_imin MIN I(Vi_i5)
+.meas TRAN v1n_imin MIN I(Vi_v1n)
+.meas TRAN v1w_imin MIN I(Vi_v1w)
+.meas TRAN v1m_imin MIN I(Vi_v1m)
+.end

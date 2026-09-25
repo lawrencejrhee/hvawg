@@ -1,0 +1,65 @@
+* SIM 2: HVAWG V2 changes on the class-A output stage alone, 100 kHz, FET = IRF730 (fitted part; APPROXIMATE VDMOS model), Rg1=1 ohm = as built (U7 drives the gate directly)
+* Starts from the verified baseline transcription (sim2_classA_repro_*.cir, which reproduces
+* ../class-a-amplifier-test-*.asc exactly) and adds the V2 parts:
+*   R28 = 100k gate-source, D4 = BZT52C12 zener (cathode on GATE, anode on SOURCE)
+*   R31 = 4.7k series from TP5 (Q1 drain / amplifier output) to TP6 (output_post);
+*         the scope load (10Meg || Cload) moves from TP5 to TP6.
+* Baseline stage values kept on purpose for continuity with the old sims: R3=50 (board R22=75),
+* rails +/-150 V, source SINE(0.75 0.75 100k) referenced to -HV, .tran/.options unchanged.
+*
+* VAR (stepped):  0 = baseline stage (+10Meg scope, R31 replaced by 1 ohm, no R28/D4)
+*                 1 = + R28/D4 only      2 = + R31 only      3 = full V2 (R28/D4 + R31)
+* Cz = zener junction capacitance (45p datasheet-typical nominal, 100p worst-case assumption)
+*
+* Node map: TP5 = drain / amp output, TP6 = output_post (after R31), SRC = source (U -IN),
+*           G = FET gate pin, OA = opamp output, NHV = -150 V rail, PHV = +150 V rail,
+*           VCC = -HV + 12 V floating opamp supply
+*
+.param VAR=3 Cload=10p Cz=45p Rg=1
+.param ZEN={(VAR==1)+(VAR==3)}
+.param R31ON={VAR>=2}
+XU1 IN SRC VCC NHV OA LM8261
+M1 TP5 G SRC SRC IRF730_APPROX
+Rg1 OA G {Rg}
+R3 SRC NHV 50
+R2 PHV TP5 10k
+* --- V2 gate protection. ZEN=0 removes it: R28 -> 1T, zener cut from G (1T) and shorted to SRC (1 ohm) ---
+R28 G SRC {if(ZEN,100k,1T)}
+RZS G DK {if(ZEN,1,1T)}
+RZS2 DK SRC {if(ZEN,1T,1)}
+D4 SRC DK DZ12
+* --- V2 output series resistor (1 ohm when R31ON=0) and scope load at TP6 ---
+R31 TP5 TP6 {if(R31ON,4.7k,1)}
+C1 TP6 0 {Cload}
+RSCOPE TP6 0 10Meg
+* --- sources (unchanged from baseline) ---
+V3 PHV 0 150
+V_neg NHV 0 -150
+V2 IN NHV SINE(0.75 0.75 100k)
+V1 N12 NHV 12
+R1 N12 VCC 1
+.step param VAR list 0 1 2 3
+.step param Cload list 10p 20p
+.step param Cz list 45p 100p
+.tran 0 50u 30u 5n
+.options method=gear plotwinsize=0 gminsteps=500 cshunt=1e-12 itl4=500
+.meas tran tp5_max max V(TP5)
+.meas tran tp5_min min V(TP5)
+.meas tran tp5_pp pp V(TP5)
+.meas tran tp6_max max V(TP6)
+.meas tran tp6_min min V(TP6)
+.meas tran tp6_pp pp V(TP6)
+.meas tran vgs_max max V(G,SRC)
+.meas tran vgs_min min V(G,SRC)
+.meas tran voa_max max V(OA,NHV)
+.meas tran iz_max max I(D4)
+.meas tran iz_min min I(D4)
+* BZT52C12 approximation (datasheet-typical assumptions): BV=12 V, Cjo swept via Cz
+.model DZ12 D(Is=1e-14 Rs=5 BV=12 Ibv=5m Cjo={Cz} M=0.4 Vj=0.75)
+* IRF730 is NOT in LTspice's library. APPROXIMATION built from typical datasheet values:
+* 400 V, Rds(on) ~0.85 ohm @10 V (1.0 max), Vth ~3.5 V (2-4 V spec), Kp=2 (Id=Kp/2*(Vgs-Vto)^2, gfs ~2.9 S class),
+* Ciss ~670p, Crss ~50p at Vds>>0 (64p @25V spec), Coss ~170p @25V, Qg ~38n. Not a vendor model.
+.model IRF730_APPROX VDMOS(Rg=2 Vto=3.5 Kp=2 Lambda=0.003 Rd=0.7 Rs=0.05 Rb=0.2 Cgdmax=0.8n Cgdmin=50p A=1 Cgs=620p Cjo=640p M=0.5 Vj=0.7 Is=20p BV=400 IBV=250u ksubthres=0.1 mfg=approximation Vds=400 Ron=1 Qg=38n)
+.lib C:\Users\lawre\AppData\Local\LTspice\lib\cmp\standard.mos
+.include ../LM8261.MOD
+.end

@@ -1,0 +1,44 @@
+* HVAWG -- SIM 3: level shifter alone -- DC operating point + static DAC transfer
+* Run:  LTspice.exe -b sim3_levelshift_dc.cir     Results: .meas tables in sim3_levelshift_dc.log
+* .dc sweep of V_DAC -1.5..+1.5 V; operating point = values AT V_DAC = 0.
+* Same run table as sim3_levelshift.cir (1-3: +/-50 V V1 / V2 45p / V2 100p; 4-6: +/-120 V).
+* Hand model (ideal op amp, no R29): I(Q3) = (V_TP3 - V_DAC)/3.6k, V(TP4)-(-HV) = 0.75*(V_TP3 - V_DAC).
+*   V_TP3 = 0.4995 V (50 V) / 1.1988 V (120 V).
+
+.include sim3_levelshift_common.inc
+.step param run 1 6 1
+.param hv = table(run, 1,50, 3,50, 4,120, 6,120)
+.param v2 = table(run, 1,0, 2,1, 3,1, 4,0, 5,1, 6,1)
+.param Cz = table(run, 1,45e-12, 2,45e-12, 3,100e-12, 4,45e-12, 5,45e-12, 6,100e-12)
+
+Vdac dac 0 0
+X1 dac tp4 tp4r s fb g iq3 id5 irv ir29 vgs LS3 params: hvp={hv} v2p={v2}
+Vsh fb s 0
+
+.options plotwinsize=0
+.dc Vdac -1.5 1.5 0.005
+
+.meas DC iq3_0   FIND V(iq3)  AT 0
+.meas DC irv_0   FIND V(irv)  AT 0
+.meas DC ir29_0  FIND V(ir29) AT 0
+.meas DC id5_0   FIND V(id5)  AT 0
+.meas DC tp4r_0  FIND V(tp4r) AT 0
+.meas DC vgs_0   FIND V(vgs)  AT 0
+.meas DC vs_0    FIND V(s)    AT 0
+.meas DC gain_0  DERIV V(tp4) AT 0
+* static swing / cutoff (V_DAC where Q3 current falls to 10 uA and 1 uA)
+.meas DC vcut10u WHEN V(iq3)=10u CROSS=1
+.meas DC vcut1u  WHEN V(iq3)=1u  CROSS=1
+.meas DC tp4r_p045 FIND V(tp4r) AT 0.45
+.meas DC tp4r_m045 FIND V(tp4r) AT -0.45
+.meas DC tp4r_p108 FIND V(tp4r) AT 1.08
+.meas DC tp4r_m108 FIND V(tp4r) AT -1.08
+.meas DC tp4r_p14  FIND V(tp4r) AT 1.4
+.meas DC tp4r_m14  FIND V(tp4r) AT -1.4
+.meas DC vgs_p14   FIND V(vgs)  AT 1.4
+.meas DC id5_p14   FIND V(id5)  AT 1.4
+.meas DC vs_p14    FIND V(s)    AT 1.4
+.meas DC vgs_m14   FIND V(vgs)  AT -1.4
+.meas DC id5max    MAX V(id5)
+.meas DC id5min    MIN V(id5)
+.end

@@ -1,0 +1,29 @@
+* HVAWG -- SIM 7e: level shifter alone, FINAL V2 values (R29 = 1 Meg), AC response + loop gain
+* Copy of sim3_levelshift.cir, one case per run (params set by sim7_run.py):
+*   HV = rail, VB = DC DAC bias (the real DAC range is -1.24 .. +1.25 V), R29V, VTQ3.
+* XCL: closed loop, AC 1 on the DAC -> V(tp4)/V(dac) (ideal -0.75 V/V).
+* XLG: loop gain, AC injection between Q3 source and U6 -IN; phase of V(s)/V(fb) at |.|=1 = PM.
+.param HV=150 VB=0 R29V=1Meg VTQ3=-3 Cz=45p RRV=3.6k
+.include sim7_ls_common.inc
+
+Vd_cl dac_cl 0 {VB} AC 1
+XCL dac_cl tp4_cl tp4r_cl s_cl fb_cl g_cl iq3_cl id5_cl irv_cl ir29_cl vgs_cl LS7 params: hvp={HV} r29v={R29V} rrv={RRV}
+Vsh_cl fb_cl s_cl 0
+
+Vd_lg dac_lg 0 {VB}
+XLG dac_lg tp4_lg tp4r_lg s_lg fb_lg g_lg iq3_lg id5_lg irv_lg ir29_lg vgs_lg LS7 params: hvp={HV} r29v={R29V} rrv={RRV}
+Vinj fb_lg s_lg 0 AC 1
+
+.options plotwinsize=0
+.ac dec 50 10 300Meg
+.meas AC glf  FIND V(tp4_cl)/V(dac_cl) AT 100
+.meas AC glfm FIND mag(V(tp4_cl)/V(dac_cl)) AT 100
+.meas AC gpk  MAX mag(V(tp4_cl)/V(dac_cl))
+.meas AC f3db WHEN mag(V(tp4_cl)/V(dac_cl))=glfm/sqrt(2) FALL=1
+.meas AC g100k FIND V(tp4_cl)/V(dac_cl) AT 100k
+.meas AC tlf  FIND mag(V(s_lg)/V(fb_lg)) AT 100
+.meas AC fc   WHEN mag(V(s_lg)/V(fb_lg))=1 FALL=1
+.meas AC fclast WHEN mag(V(s_lg)/V(fb_lg))=1 CROSS=LAST
+.meas AC pmx  FIND V(s_lg)/V(fb_lg) WHEN mag(V(s_lg)/V(fb_lg))=1 FALL=1
+.meas AC pmlast FIND V(s_lg)/V(fb_lg) WHEN mag(V(s_lg)/V(fb_lg))=1 CROSS=LAST
+.end

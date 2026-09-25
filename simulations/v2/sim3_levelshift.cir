@@ -1,0 +1,44 @@
+* HVAWG -- SIM 3: level shifter alone (U6 + Q3 driving TP4), AC response + loop gain
+* Run:  LTspice.exe -b sim3_levelshift.cir     Results: .meas tables in sim3_levelshift.log
+* Models / assumptions: see sim3_levelshift_common.inc.
+*
+* .step param run 1..6:
+*   run 1: +/-50 V,  V1 (no R29/D5)      run 4: +/-120 V, V1
+*   run 2: +/-50 V,  V2, Cz = 45p        run 5: +/-120 V, V2, Cz = 45p
+*   run 3: +/-50 V,  V2, Cz = 100p       run 6: +/-120 V, V2, Cz = 100p
+* Two independent copies per run (own supplies), both at V_DAC = 0 DC:
+*   XCL: closed loop, AC 1 on the DAC     -> V(tp4_cl)/V(dac_cl)  (hand: -0.75 V/V, inverting)
+*   XLG: loop gain, AC 1 voltage injection between Q3 source and U6 -IN
+*        T = -V(s_lg)/V(fb_lg); at |T| = 1 the phase of V(s_lg)/V(fb_lg) IS the phase margin.
+
+.include sim3_levelshift_common.inc
+.step param run 1 6 1
+.param hv = table(run, 1,50, 3,50, 4,120, 6,120)
+.param v2 = table(run, 1,0, 2,1, 3,1, 4,0, 5,1, 6,1)
+.param Cz = table(run, 1,45e-12, 2,45e-12, 3,100e-12, 4,45e-12, 5,45e-12, 6,100e-12)
+
+Vd_cl dac_cl 0 0 AC 1
+XCL dac_cl tp4_cl tp4r_cl s_cl fb_cl g_cl iq3_cl id5_cl irv_cl ir29_cl vgs_cl LS3 params: hvp={hv} v2p={v2}
+Vsh_cl fb_cl s_cl 0
+
+Vd_lg dac_lg 0 0
+XLG dac_lg tp4_lg tp4r_lg s_lg fb_lg g_lg iq3_lg id5_lg irv_lg ir29_lg vgs_lg LS3 params: hvp={hv} v2p={v2}
+Vinj fb_lg s_lg 0 AC 1
+
+.options plotwinsize=0
+.ac dec 50 10 300Meg
+
+* closed-loop response (complex results print as (dB, phase))
+.meas AC glf  FIND V(tp4_cl)/V(dac_cl) AT 100
+.meas AC glfm FIND mag(V(tp4_cl)/V(dac_cl)) AT 100
+.meas AC gpk  MAX mag(V(tp4_cl)/V(dac_cl))
+.meas AC f3db WHEN mag(V(tp4_cl)/V(dac_cl))=glfm/sqrt(2) FALL=1
+.meas AC g100k FIND V(tp4_cl)/V(dac_cl) AT 100k
+.meas AC g1meg FIND V(tp4_cl)/V(dac_cl) AT 1Meg
+* loop gain: crossover and phase margin (phase of the result = PM)
+.meas AC tlf  FIND mag(V(s_lg)/V(fb_lg)) AT 100
+.meas AC fc   WHEN mag(V(s_lg)/V(fb_lg))=1 FALL=1
+.meas AC fclast WHEN mag(V(s_lg)/V(fb_lg))=1 CROSS=LAST
+.meas AC pmx  FIND V(s_lg)/V(fb_lg) WHEN mag(V(s_lg)/V(fb_lg))=1 FALL=1
+.meas AC t100k FIND V(s_lg)/V(fb_lg) AT 100k
+.end
