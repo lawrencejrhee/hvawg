@@ -12,6 +12,8 @@
 # NOTE: the 74HC595 is powered from the board's 5V rail, so its logic HIGH
 # threshold is ~3.5V while the Pico drives 3.3V. This is marginal/out-of-spec.
 # If TP2 looks glitchy or bits are missing, that's the likely cause.
+# Boards built from the V2 rev 2 BOM fit a 74HCT595 instead (VIH 2.0V at 5V),
+# so 3.3V drive is in spec on those.
 
 from machine import Pin
 import math

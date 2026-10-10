@@ -16,6 +16,8 @@
 # (the DAC sine appeared at TP2 driven by the Pico). The README also states
 # 3.3V/5V inputs both work. (Datasheet VIH at VCC=5V is 3.5V, so it's
 # technically marginal -- but it's empirically fine here.)
+# Boards built from the V2 rev 2 BOM fit a 74HCT595 instead (VIH 2.0V at 5V),
+# so 3.3V drive is in spec on those.
 
 from machine import Pin, SPI
 import time
